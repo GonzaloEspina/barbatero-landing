@@ -5,7 +5,7 @@ import ServiceSelect from "./ServiceSelect";
 import NewClientForm from "./NewClientForm";
 import ClientCard from "./ClientCard";
 import { normalizeToHM, parseDateFromString, formatDateDMY, formatDateISO } from "./utils";
-
+ 
 export default function TurnoFinder() {
   const [contacto, setContacto] = useState("");
   const [cliente, setCliente] = useState(null);
@@ -17,14 +17,17 @@ export default function TurnoFinder() {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
 
-  // form state
+  // fecha: se usa internamente en MM/DD/YYYY (para lógica/payload)
   const [fecha, setFecha] = useState("");
-  const [hora, setHora] = useState("");
-  const [servicio, setServicio] = useState("");
-  const [horarios, setHorarios] = useState([]);
-  const [servicios, setServicios] = useState([]);
-  const [creating, setCreating] = useState(false);
-  const [disponibilidadMsg, setDisponibilidadMsg] = useState("");
+  // fechaDisplay: lo que ve el usuario en DD/MM/YYYY
+  const [fechaDisplay, setFechaDisplay] = useState("");
+  // form state
+   const [hora, setHora] = useState("");
+   const [servicio, setServicio] = useState("");
+   const [horarios, setHorarios] = useState([]);
+   const [servicios, setServicios] = useState([]);
+   const [creating, setCreating] = useState(false);
+   const [disponibilidadMsg, setDisponibilidadMsg] = useState("");
 
   // calendar state
   const [calendarDays, setCalendarDays] = useState([]);
@@ -36,13 +39,35 @@ export default function TurnoFinder() {
   const minDateISO = formatDateISO(today);
   const maxDateISO = formatDateISO(maxDateObj);
 
+  // helper: formatear Date -> MM/DD/YYYY (para lógica)
+  const formatDateMMDD = (d) => {
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${pad(d.getMonth() + 1)}/${pad(d.getDate())}/${d.getFullYear()}`;
+  };
+  // helper: formatear Date -> DD/MM/YYYY (para mostrar al usuario)
+  const formatDateDDMM = (d) => {
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+  };
+
   const buscarCliente = async () => {
     if (!contacto) { setError("Ingrese un correo."); return; }
     setLoading(true); setCliente(null); setUpcoming([]); setError(""); setClientNotFound(false);
     try {
       const res = await fetch("/api/turnos/find-client", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contacto }) });
       const data = await res.json();
-      if (res.ok && data.found) { setCliente(data.client); setUpcoming(data.upcoming || []); setClientNotFound(false); }
+      if (res.ok && data.found) {
+        setCliente(data.client);
+        // mostrar upcoming en formato DD/MM/YYYY para el usuario
+        const mapped = (data.upcoming || []).map(t => {
+          try {
+            const dt = parseDateFromString(t.Fecha);
+            return { ...t, Fecha: dt ? formatDateDMY(dt) : (t.Fecha || "") };
+          } catch { return t; }
+        });
+        setUpcoming(mapped);
+        setClientNotFound(false);
+      }
       else { setError(""); setClientNotFound(true); setNuevoNombre(""); setNuevoTelefono(""); }
     } catch (err) { console.error(err); setError("Error de conexión al backend."); }
     finally { setLoading(false); }
@@ -92,7 +117,7 @@ export default function TurnoFinder() {
   };
 
   const openModal = () => {
-    setShowModal(true); setFecha(""); setHora(""); setServicio(""); setHorarios([]); setDisponibilidadMsg(""); setCalendarDays([]); setLoadingCalendar(true);
+    setShowModal(true); setFecha(""); setFechaDisplay(""); setHora(""); setServicio(""); setHorarios([]); setDisponibilidadMsg(""); setCalendarDays([]); setLoadingCalendar(true);
     (async () => {
       try {
         const url = `/api/turnos/calendar?start=${encodeURIComponent(minDateISO)}&end=${encodeURIComponent(maxDateISO)}`;
@@ -118,12 +143,24 @@ export default function TurnoFinder() {
   const selectFecha = (iso, payload) => {
     if (!payload || !payload.available) {
       setDisponibilidadMsg("El día ingresado no está disponible, por favor pruebe ingresando otra fecha.");
-      setFecha(""); setHorarios([]); setHora(""); setServicio(""); return;
+      setFecha(""); setFechaDisplay(""); setHorarios([]); setHora(""); setServicio(""); return;
     }
-    setFecha(iso); setHorarios((payload.horarios || []).map(normalizeToHM)); setDisponibilidadMsg(""); setHora(""); setServicio("");
+    const d = new Date(iso + "T00:00:00");
+    setFecha(formatDateMMDD(d));          // lógica / payload -> MM/DD/YYYY
+    setFechaDisplay(formatDateDDMM(d));  // lo que ve el usuario -> DD/MM/YYYY
+    setHorarios((payload.horarios || []).map(normalizeToHM)); setDisponibilidadMsg(""); setHora(""); setServicio("");
   };
 
   const selectHora = (h) => setHora(h);
+
+  // permitir múltiples turnos según columna de Clientes
+  const allowsMultiple = (() => {
+    if (!cliente) return true; // por defecto permitir si no hay info
+    const v = cliente["¿Puede sacar múltiples turnos?"] ?? cliente["Puede sacar múltiples turnos"] ?? cliente.puedeMultiples ?? cliente.puede_multiple ?? "";
+    return String(v).trim().toLowerCase() === "si";
+  })();
+
+  const hasUpcoming = Array.isArray(upcoming) && upcoming.length > 0;
 
   const submitTurno = async () => {
     if (!fecha || !hora || !servicio || !cliente) { setError("Complete Fecha, Hora y Servicio."); return; }
@@ -135,14 +172,15 @@ export default function TurnoFinder() {
             contacto,
             clienteRowId,
             clienteName: cliente && (cliente["Nombre y Apellido"] || cliente.Nombre || cliente.name) || "",
+            // enviar Fecha en MM/DD/YYYY (fecha tiene formato MM/DD/YYYY para la lógica)
             Fecha: fecha,
             Hora: horaParaEnviar,
             Servicio: servicio // esperamos que sea Row ID del servicio o nombre
         };
-      const res = await fetch("/api/turnos/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      const data = await res.json().catch(()=>null);
-      if (res.ok) { setShowModal(false); await buscarCliente(); }
-      else { console.error("create turno failed:", res.status, data); setError(data?.message || `Error al crear turno (status ${res.status})`); }
+       const res = await fetch("/api/turnos/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+       const data = await res.json().catch(()=>null);
+       if (res.ok) { setShowModal(false); await buscarCliente(); }
+       else { console.error("create turno failed:", res.status, data); setError(data?.message || `Error al crear turno (status ${res.status})`); }
     } catch (e) { console.error(e); setError("Error de conexión al backend al crear turno."); }
     finally { setCreating(false); }
   };
@@ -160,7 +198,58 @@ export default function TurnoFinder() {
 
       {clientNotFound && <NewClientForm nuevoNombre={nuevoNombre} setNuevoNombre={setNuevoNombre} nuevoTelefono={nuevoTelefono} setNuevoTelefono={setNuevoTelefono} onCreate={crearYSeleccionarCliente} onCancel={() => setClientNotFound(false)} loading={loading} />}
 
-      {cliente && <ClientCard cliente={cliente} upcoming={upcoming} openModal={openModal} />}
+      {cliente && (
+        <div className="border border-gray-300 rounded-lg p-6 shadow-md bg-gray-50 text-black">
+          <h3 className="text-xl font-bold text-blue-700 mb-4">Cliente encontrado</h3>
+          <p><span className="font-semibold">Nombre:</span> <span className="font-bold">{cliente["Nombre y Apellido"]}</span></p>
+          <p><span className="font-semibold">Teléfono:</span> <span className="font-bold">{cliente["Teléfono"] || "-"}</span></p>
+          <p><span className="font-semibold">Correo:</span> <span className="font-bold">{cliente.Correo || contacto}</span></p>
+
+          <div className="mt-4">
+            <h4 className="font-semibold">Próximos turnos</h4>
+            {(!Array.isArray(upcoming) || upcoming.length === 0) ? (
+              <div className="mt-2">
+                <p>No hay turnos futuros.</p>
+                <button
+                  onClick={openModal}
+                  className="mt-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                >
+                  Sacar Turno
+                </button>
+              </div>
+            ) : (
+              <div className="mt-2">
+                <ul className="space-y-2">
+                  {upcoming.map((t, i) => (
+                    <li key={i} className="p-2 bg-white rounded border">
+                      <div><span className="font-semibold">Fecha:</span> {t.Fecha}</div>
+                      <div><span className="font-semibold">Hora:</span> {t.Hora}</div>
+                      <div><span className="font-semibold">Servicio:</span> {t.Servicio}</div>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-3">
+                  {(!allowsMultiple) ? (
+                    <div className="flex items-center gap-3">
+                      <p className="text-sm text-gray-700">Si querés sacar más turnos este mes, por favor contactanos por Whatsapp</p>
+                      <a
+                        href="https://wa.me/541160220978?text=Hola%2C%20quiero%20sacar%20un%20turno"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1 bg-green-600 text-white rounded"
+                      >
+                        Whatsapp
+                      </a>
+                    </div>
+                  ) : (
+                    <button onClick={openModal} className="px-3 py-1 text-sm bg-yellow-500 rounded">Sacar otro turno</button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -189,7 +278,22 @@ export default function TurnoFinder() {
 
             <div className="flex justify-end gap-2">
               <button onClick={() => setShowModal(false)} className="px-3 py-1 border rounded">Cancelar</button>
-              <button onClick={submitTurno} disabled={creating || !fecha || !hora || !servicio} className="px-3 py-1 bg-blue-600 text-white rounded">{creating ? "Creando..." : "Confirmar"}</button>
+
+              {(!allowsMultiple && hasUpcoming) ? (
+                <div className="flex items-center gap-3">
+                  <p className="text-sm text-gray-700">Si querés sacar más turnos este mes, por favor contactanos por Whatsapp</p>
+                  <a
+                    href="https://wa.me/541160220978?text=Hola%2C%20quiero%20sacar%20m%C3%A1s%20turnos"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-1 bg-green-600 text-white rounded"
+                  >
+                    Whatsapp
+                  </a>
+                </div>
+              ) : (
+                <button onClick={submitTurno} disabled={creating || !fecha || !hora || !servicio} className="px-3 py-1 bg-blue-600 text-white rounded">{creating ? "Creando..." : "Confirmar"}</button>
+              )}
             </div>
           </div>
         </div>
