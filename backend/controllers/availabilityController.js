@@ -23,6 +23,77 @@ function normalizeToHM(value) {
   return s;
 }
 
+// helper: extrae y parsea la primera fecha dentro de una cadena (DD/MM/YY, DD/MM/YYYY, MM/DD/YY, ISO)
+function parseDateFromAnyString(input) {
+  if (input === null || input === undefined) return null;
+
+  // si viene como objeto (AppSheet puede devolver objetos con displayValue/value)
+  if (typeof input === "object") {
+    // extraer candidato textual
+    const cand = input.value ?? input.displayValue ?? input.text ?? input.label ?? null;
+    if (cand) return parseDateFromAnyString(cand);
+    if (input instanceof Date && !isNaN(input.getTime())) return input;
+    // fallback a toString si contenido útil
+    const str = (input.toString && input.toString() !== "[object Object]") ? input.toString() : null;
+    if (str) return parseDateFromAnyString(str);
+    return null;
+  }
+
+  // si viene como número (posible epoch)
+  if (typeof input === "number") {
+    const dNum = new Date(input);
+    if (!isNaN(dNum.getTime())) return dNum;
+    return null;
+  }
+
+  // normalizar espacios/tab/nbsp y otros caracteres no imprimibles
+  let s = String(input).replace(/\u00A0/g, " ").replace(/\t/g, " ").replace(/\r/g, " ").replace(/\n/g, " ").trim();
+  s = s.replace(/\s+/g, " ");
+  if (!s) return null;
+
+  // intento rápido: si JS puede parsear un ISO/fecha claramente, convertir a UTC date
+  const jsDate = new Date(s);
+  if (!isNaN(jsDate.getTime())) {
+    // aceptar si el string parece ISO o empieza con año (evita MM/DD ambiguity)
+    if (/^\d{4}-\d{2}-\d{2}/.test(s) || /^\d{4}/.test(s)) {
+      return new Date(Date.UTC(jsDate.getFullYear(), jsDate.getMonth(), jsDate.getDate()));
+    }
+  }
+
+  // 1) intentar parseFechaDMY directo (tu util)
+  try {
+    const p = parseFechaDMY(s);
+    if (p && !isNaN(p.getTime())) return p;
+  } catch (e) {}
+
+  // 2) buscar primera ocurrencia ISO o D/M/Y
+  const m = s.match(/(\d{4}-\d{2}-\d{2})|(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/);
+  if (!m) return null;
+  const found = m[0].trim();
+
+  // si es ISO (YYYY-MM-DD)
+  const isoMatch = found.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    const yy = Number(isoMatch[1]), mm = Number(isoMatch[2]), dd = Number(isoMatch[3]);
+    return new Date(Date.UTC(yy, mm - 1, dd));
+  }
+
+  // si es D/M/Y o M/D/Y: intentar parseFechaDMY sobre el substring y, si falla, construir manualmente
+  try {
+    const p2 = parseFechaDMY(found);
+    if (p2 && !isNaN(p2.getTime())) return p2;
+  } catch (e) {}
+
+  const parts = found.split(/[\/\-]/).map(x => Number(x));
+  if (parts.length === 3) {
+    let [a, b, y] = parts;
+    if (y < 100) y += 2000;
+    // asumir D/M/Y (convención del sistema)
+    return new Date(Date.UTC(y, (b - 1), a));
+  }
+  return null;
+}
+
 export async function getDisponibilidad(req, res) {
   try {
     const fechaStr = req.query.fecha; // esperar ISO yyyy-mm-dd
@@ -304,36 +375,177 @@ export async function getCalendarAvailability(req, res) {
       hrs.forEach(h => { if (h) occupiedByISO[iso].add(h); });
     });
 
-    // evaluate each date
-    const result = dates.map(d => {
-      const iso = formatISO(d);
-      const numero = d.getUTCDay() + 1; // 1..7
-      const numStr = String(numero);
-      // 1) check disponibilidad by weekday
-      const horariosDia = disponibilidadMap[numStr] || disponibilidadMap[String(numero-1)] || disponibilidadMap[WEEKDAY_NAMES[numero-1]] || disponibilidadMap[WEEKDAY_NAMES[numero-1].toLowerCase()] || [];
-      const weekdayBlocked = horariosDia.length === 0;
-      // 2) check Cancelar Agenda
-      let blockedByCancel = false;
-      for (const r of (cancelRows||[])) {
-        const tipo = String(r.Cancelar ?? r["Cancelar"] ?? "").trim().toLowerCase();
-        const diaRaw = r["Día"] ?? r["Dia"] ?? r.Dia;
-        const diaDate = parseFechaDMY(diaRaw);
-        if (diaDate && tipo.includes("un") && toISODate(diaDate) === iso) { blockedByCancel = true; break; }
-        const desdeDate = parseFechaDMY(r.Desde ?? r["Desde"]);
-        const hastaDate = parseFechaDMY(r.Hasta ?? r["Hasta"]);
-        if (desdeDate && hastaDate && d.getTime() >= desdeDate.getTime() && d.getTime() <= hastaDate.getTime()) { blockedByCancel = true; break; }
-      }
-      // 3) occupied hours
-      const occupiedSet = occupiedByISO[iso] || new Set();
-      const horariosNormalized = (horariosDia || []).map(normalizeToHM);
-      const availableHorarios = horariosNormalized.filter(h => !occupiedSet.has(h));
-      const available = !weekdayBlocked && !blockedByCancel && availableHorarios.length > 0;
-      return { iso, numero, blocked: weekdayBlocked || blockedByCancel ? true : false, weekdayBlocked, blockedByCancel, available, horarios: availableHorarios };
+    // --- Nuevo: calcular días bloqueados según Cancelar Agenda ---
+    const blockedVariosSet = new Set(); // días bloqueados por los "Varios días"
+    const blockedUnDiaSet = new Set(); // días bloqueados por cada "Un día"
+    // encontrar todas las filas cuyo Cancelar sea "Varios días"
+    const variosRows = (cancelRows || []).filter(r => {
+      const tipoRaw = r.Cancelar ?? r["Cancelar"] ?? r.cancelar ?? "";
+      const tipo = String(tipoRaw).trim().toLowerCase();
+      return tipo.includes("var") || tipo.includes("varios");
     });
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+    for (const row of variosRows) {
+      const desdeRaw = row.Desde ?? row["Desde"] ?? row.desde ?? null;
+      const hastaRaw = row.Hasta ?? row["Hasta"] ?? row.hasta ?? null;
+      const desdeCandidates = isoCandidatesFromString(desdeRaw);
+      const hastaCandidates = isoCandidatesFromString(hastaRaw);
+      console.log("[getCalendarAvailability] Varios row desde candidates:", desdeCandidates, "hasta candidates:", hastaCandidates);
+
+      // elegir la pareja válida (di <= hi) con span mínimo en días
+      let bestPair = null;
+      let bestSpan = Infinity;
+      for (const di of desdeCandidates) {
+        for (const hi of hastaCandidates) {
+          try {
+            const dDate = new Date(di + "T00:00:00Z");
+            const hDate = new Date(hi + "T00:00:00Z");
+            if (isNaN(dDate.getTime()) || isNaN(hDate.getTime())) continue;
+            if (dDate.getTime() <= hDate.getTime()) {
+              const span = Math.round((hDate.getTime() - dDate.getTime()) / MS_PER_DAY);
+              if (span < bestSpan) { bestSpan = span; bestPair = [di, hi]; }
+            }
+          } catch (e) { /* ignore invalid combos */ }
+        }
+      }
+
+      // fallback a preferredIso si no hay combinaciones válidas
+      if (!bestPair) {
+        const df = preferredIsoFromString(desdeRaw);
+        const hf = preferredIsoFromString(hastaRaw);
+        if (df && hf && df <= hf) bestPair = [df, hf];
+      }
+
+      if (bestPair) {
+        const [desdeIso, hastaIso] = bestPair;
+        const [sy, sm, sd] = desdeIso.split("-").map(Number);
+        const [ey, em, ed] = hastaIso.split("-").map(Number);
+        let cur = new Date(Date.UTC(sy, sm - 1, sd));
+        const end = new Date(Date.UTC(ey, em - 1, ed));
+        while (cur <= end) {
+          blockedVariosSet.add(`${cur.getUTCFullYear()}-${String(cur.getUTCMonth()+1).padStart(2,"0")}-${String(cur.getUTCDate()).padStart(2,"0")}`);
+          cur.setUTCDate(cur.getUTCDate() + 1);
+        }
+      } else {
+        console.log("[getCalendarAvailability] no se encontró pareja válida para Varios días (desde/hasta):", desdeRaw, hastaRaw);
+      }
+    }
+    // agregar todas las filas "Un día"
+    for (const r of (cancelRows || [])) {
+      const tipoRaw = r.Cancelar ?? r["Cancelar"] ?? r.cancelar ?? "";
+      const tipo = String(tipoRaw).trim().toLowerCase();
+      if (tipo.includes("un")) {
+        const diaRaw = r["Día"] ?? r["Dia"] ?? r.Dia ?? null;
+        const diaCandidates = isoCandidatesFromString(diaRaw);
+        if (diaRaw) console.log("[getCalendarAvailability] marcar Un día candidates:", diaCandidates);
+        diaCandidates.forEach(c => blockedUnDiaSet.add(c));
+      }
+    }
+    console.log("[getCalendarAvailability] blockedVariosSet:", Array.from(blockedVariosSet).slice(0,20));
+    console.log("[getCalendarAvailability] blockedUnDiaSet:", Array.from(blockedUnDiaSet).slice(0,20));
+
+    // evaluate each date
+     const result = dates.map(d => {
+       const iso = formatISO(d);
+       const numero = d.getUTCDay() + 1; // 1..7
+       const numStr = String(numero);
+       // 1) check disponibilidad by weekday
+       const horariosDia = disponibilidadMap[numStr] || disponibilidadMap[String(numero-1)] || disponibilidadMap[WEEKDAY_NAMES[numero-1]] || disponibilidadMap[WEEKDAY_NAMES[numero-1].toLowerCase()] || [];
+       const weekdayBlocked = horariosDia.length === 0;
+       // 2) Cancelar Agenda: usar sets calculados previamente
+       const blockedByCancel = blockedUnDiaSet.has(iso) || blockedVariosSet.has(iso);
+        // 3) occupied hours
+        const occupiedSet = occupiedByISO[iso] || new Set();
+        const horariosNormalized = (horariosDia || []).map(normalizeToHM);
+        const availableHorarios = horariosNormalized.filter(h => !occupiedSet.has(h));
+        const available = !weekdayBlocked && !blockedByCancel && availableHorarios.length > 0;
+        return { iso, numero, blocked: weekdayBlocked || blockedByCancel ? true : false, weekdayBlocked, blockedByCancel, available, horarios: availableHorarios };
+     });
 
     return res.status(200).json({ days: result });
   } catch (err) {
     console.error("[getCalendarAvailability] error:", err);
     return res.status(500).json({ message: "Error calculando disponibilidad del calendario" });
+  }
+}
+
+// devuelve array de ISO strings (YYYY-MM-DD) candidatas a partir de un valor de celda
+function isoCandidatesFromString(s) {
+  if (!s && s !== 0) return [];
+  // si es objeto/numero reutilizar el parser que ya tenemos
+  if (typeof s === "object" || typeof s === "number") {
+    const p = parseDateFromAnyString(s);
+    if (p && !isNaN(p.getTime())) return [toISODate(p)];
+    // si no pudo, intentar con toString
+    s = String(s);
+  }
+  s = String(s).trim();
+  if (!s) return [];
+
+  const out = new Set();
+  // 1) ISO explícito
+  const mIso = s.match(/(\d{4}-\d{2}-\d{2})/);
+  if (mIso) out.add(mIso[1]);
+
+  // 2) intentar parseFechaDMY (tu util) - preferido
+  try {
+    const p = parseFechaDMY(s);
+    if (p && !isNaN(p.getTime())) out.add(toISODate(p));
+  } catch (e) {}
+
+  // 3) buscar patrones D/M/Y o M/D/Y y generar variantes (disambiguar cuando sea posible)
+  for (const m of s.matchAll(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/g)) {
+    let a = Number(m[1]), b = Number(m[2]), y = Number(m[3]);
+    if (y < 100) y += 2000;
+    // si alguno >12, sabemos qué es día
+    if (a > 12 && b <= 12) {
+      out.add(new Date(Date.UTC(y, b - 1, a)).toISOString().slice(0,10));
+    } else if (b > 12 && a <= 12) {
+      out.add(new Date(Date.UTC(y, a - 1, b)).toISOString().slice(0,10));
+    } else {
+      // ambiguo: agregar D/M/Y y M/D/Y si distinto
+      const d1 = new Date(Date.UTC(y, b - 1, a)).toISOString().slice(0,10); // D/M/Y
+      out.add(d1);
+      const d2 = new Date(Date.UTC(y, a - 1, b)).toISOString().slice(0,10); // M/D/Y
+      out.add(d2);
+    }
+  }
+
+  return Array.from(out);
+}
+
+// Devuelve una única ISO preferida para usar en rangos (prioriza DMY y evita pares mixtos)
+function preferredIsoFromString(s) {
+  if (!s && s !== 0) return null;
+  // si es objeto/numero usar parseDateFromAnyString
+  if (typeof s === "object" || typeof s === "number") {
+    const p = parseDateFromAnyString(s);
+    if (p && !isNaN(p.getTime())) return toISODate(p);
+    s = String(s);
+  }
+  s = String(s).trim();
+  if (!s) return null;
+
+  // 1) preferir parseFechaDMY (tu util)
+  try {
+    const p = parseFechaDMY(s);
+    if (p && !isNaN(p.getTime())) return toISODate(p);
+  } catch (e) {}
+
+  // 2) buscar patrón D/M/Y o M/D/Y y escoger DMY salvo que podamos disambiguar
+  const m = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if (!m) return null;
+  let a = Number(m[1]), b = Number(m[2]), y = Number(m[3]);
+  if (y < 100) y += 2000;
+  // si uno de los dos >12 podemos inferir cuál es día
+  if (a > 12 && b <= 12) {
+    // a es día -> D/M/Y
+    return new Date(Date.UTC(y, b - 1, a)).toISOString().slice(0,10);
+  } else if (b > 12 && a <= 12) {
+    // b es día -> M/D/Y (interpretar como MDY)
+    return new Date(Date.UTC(y, a - 1, b)).toISOString().slice(0,10);
+  } else {
+    // ambiguo -> elegir D/M/Y por convención (evita rangos excesivamente amplios)
+    return new Date(Date.UTC(y, b - 1, a)).toISOString().slice(0,10);
   }
 }
