@@ -204,7 +204,8 @@ export default function TurnoFinder() {
 
     // pedir disponibilidad AL BACKEND (que devuelve { horarios: [...] } con los horarios DISPONIBLES)
     try {
-      const res = await fetch(`/api/turnos/disponibilidad?fecha=${encodeURIComponent(iso)}`);
+      // añadir cache-bust para evitar 304/response cached que deje datos desactualizados
+      const res = await fetch(`/api/turnos/disponibilidad?fecha=${encodeURIComponent(iso)}&_=${Date.now()}`);
       if (res.ok) {
         const json = await res.json().catch(()=>null);
         if (json && Array.isArray(json.horarios)) {
