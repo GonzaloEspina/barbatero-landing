@@ -363,10 +363,29 @@ export async function getCalendarAvailability(req, res) {
 
     // group occupied hours per date ISO
     const occupiedByISO = {};
+    // calcular ISO de hoy (UTC) para filtrar turnos anteriores
+    const pad2 = (n) => String(n).padStart(2,"0");
+    const now = new Date();
+    const todayIso = `${now.getUTCFullYear()}-${pad2(now.getUTCMonth()+1)}-${pad2(now.getUTCDate())}`;
     (turnosRows || []).forEach((r) => {
-      const fechaParsed = parseFechaDMY(r.Fecha);
-      if (!fechaParsed) return;
-      const iso = toISODate(fechaParsed);
+      const fechaParsed = parseFechaDMY ? parseFechaDMY(r.Fecha) : null;
+      let iso = null;
+      if (fechaParsed) iso = toISODate(fechaParsed);
+      else {
+        // fallback: intentar interpretar dd/mm/yyyy / mm/dd/yyyy
+        const s = String(r.Fecha ?? "");
+        const m = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+        if (m) {
+          let a = Number(m[1]), b = Number(m[2]), y = Number(m[3]);
+          if (y < 100) y += 2000;
+          if (a > 12 && b <= 12) iso = new Date(Date.UTC(y, b - 1, a)).toISOString().slice(0,10);
+          else if (b > 12 && a <= 12) iso = new Date(Date.UTC(y, a - 1, b)).toISOString().slice(0,10);
+          else iso = new Date(Date.UTC(y, b - 1, a)).toISOString().slice(0,10);
+        }
+      }
+      if (!iso) return;
+      // ignorar turnos anteriores a hoy
+      if (iso < todayIso) return;
       let hrs = [];
       const hField = r.Hora ?? r['Hora'] ?? r.hora ?? "";
       if (Array.isArray(hField)) hrs = hField.map(x => normalizeToHM(x));
