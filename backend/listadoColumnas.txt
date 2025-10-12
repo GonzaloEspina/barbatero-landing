@@ -1,0 +1,14 @@
+tabla Turnos:
+Row ID | Cliente | Cliente ID | Fecha |  Hora |  Servicio | Membresía ID 
+
+tabla Clientes:
+Row ID | Nombre y Apellido | Teléfono | Correo | ¿Puede sacar múltiples turnos?
+
+tabla Disponibilidad:
+Día | Horarios | Número
+
+tabla Servicios:
+Servicio
+
+tabla Cancelar Agenda:
+Row ID | Cancelar | Desde | Hasta | Día

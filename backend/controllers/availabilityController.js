@@ -4,6 +4,9 @@ import { normalizeRows, extractTimeHHMM, parseFechaDMY, toISODate } from "../uti
 const TURNOS_TABLE = "Turnos";
 const DISPONIBILIDAD_TABLE = "Disponibilidad";
 
+// Añadido: definir una sola vez los nombres de los weekdays
+const WEEKDAY_NAMES = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+
 function normalizeToHM(value) {
   if (value === null || value === undefined) return "";
   if (typeof value === "object") {
@@ -22,95 +25,78 @@ function normalizeToHM(value) {
 
 export async function getDisponibilidad(req, res) {
   try {
-    const numero = req.query.num ? Number(req.query.num) : null; // weekday num expected
-    const fechaStr = req.query.fecha; // ISO yyyy-mm-dd
-    let requestedDate = null;
-    if (fechaStr) requestedDate = new Date(fechaStr + "T00:00:00");
+    const fechaStr = req.query.fecha; // esperar ISO yyyy-mm-dd
+    const numParam = req.query.num ? Number(req.query.num) : null;
 
-    // leer Disponibilidad
+    // Leer Disponibilidad
     let dispResp = await appsheet.findRows(DISPONIBILIDAD_TABLE, `([Número] <> "")`);
-    let dispRows = normalizeRows(dispResp);
-    if (!dispRows || dispRows.length === 0) {
-      const tmp = await appsheet.readRows(DISPONIBILIDAD_TABLE);
-      dispRows = normalizeRows(tmp) || [];
-    }
+    let dispRows = normalizeRows(dispResp) || [];
+    if (!dispRows.length) dispRows = normalizeRows(await appsheet.readRows(DISPONIBILIDAD_TABLE)) || [];
 
-    // obtener horarios por número de día
+    // construir map simple: clave = número 1..7 -> horarios normalizados HH:MM
     const disponibilidadMap = {};
-    (dispRows||[]).forEach(r => {
-      const num = String(r["Número"] ?? r.Numero ?? r.numero ?? "").trim();
+    for (const r of (dispRows || [])) {
+      const keyRaw = String(r["Número"] ?? r.Numero ?? r.numero ?? r["Día"] ?? r.Dia ?? "").trim();
       const raw = r["Horarios"] ?? r.Horarios ?? r.horarios ?? "";
       let arr = [];
-      if (Array.isArray(raw)) arr = raw.map(x=>extractTimeHHMM(x));
-      else arr = String(raw||"").split(",").map(x=>extractTimeHHMM(x)).filter(Boolean);
-      disponibilidadMap[num] = Array.from(new Set(arr.filter(Boolean)));
-    });
+      if (Array.isArray(raw)) arr = raw.map(x => normalizeToHM(x));
+      else arr = String(raw || "").split(",").map(x => normalizeToHM(x)).filter(Boolean);
+      const uniq = Array.from(new Set(arr.filter(Boolean)));
 
-    // leer Cancelar Agenda
-    let cancelResp = await appsheet.findRows("Cancelar Agenda", `([Cancelar] <> "")`);
-    let cancelRows = normalizeRows(cancelResp);
-    if (!cancelRows || cancelRows.length === 0) {
-      const tmp = await appsheet.readRows("Cancelar Agenda");
-      cancelRows = normalizeRows(tmp) || [];
+      // determinar números asociados (1..7)
+      const nums = new Set();
+      const n = Number(keyRaw);
+      if (!isNaN(n)) {
+        if (n >= 1 && n <= 7) nums.add(n);
+        else if (n >= 0 && n <= 6) nums.add(n + 1);
+      } else if (keyRaw) {
+        const idx = WEEKDAY_NAMES.findIndex(w => w.toLowerCase() === keyRaw.toLowerCase());
+        if (idx >= 0) nums.add(idx + 1);
+      }
+
+      for (const num of nums) {
+        disponibilidadMap[String(num)] = uniq;
+      }
     }
 
-    // si no piden fecha específica, devolver la lista de horarios del numero
-    if (!requestedDate) {
-      const horarios = disponibilidadMap[String(numero)] || [];
+    // si no se pidió fecha, devolver la lista para num param (si existe)
+    if (!fechaStr) {
+      const horarios = disponibilidadMap[String(numParam)] || [];
       return res.status(200).json({ horarios });
     }
 
-    // buscar turnos en la fecha (múltiples formatos dd/mm/yy etc handled by calendar endpoint ideally)
-    const formatDMYY = d => {
-      const dd = String(d.getUTCDate()).padStart(2,'0');
-      const mm = String(d.getUTCMonth()+1).padStart(2,'0');
-      const yy = String(d.getUTCFullYear()).slice(-2);
-      return `${dd}/${mm}/${yy}`;
-    };
+    // parsear fecha solicitada (ISO esperado)
+    const requestedDate = new Date(fechaStr + "T00:00:00");
+    if (isNaN(requestedDate.getTime())) {
+      return res.status(400).json({ message: "Fecha inválida. Usar yyyy-mm-dd" });
+    }
 
-    const fechaDMYY = formatDMYY(requestedDate);
-    const filterTurnos = `([Fecha] = "${fechaDMYY}")`;
-    let turnosResp = await appsheet.findRows(TURNOS_TABLE, filterTurnos);
+    // obtener turnos del día: leer todos y filtrar localmente por Fecha == requestedDate
+    let turnosResp = await appsheet.readRows(TURNOS_TABLE);
     let turnosRows = normalizeRows(turnosResp) || [];
-
-    // fallback read all and filter
-    if (!turnosRows || turnosRows.length === 0) {
-      const tmp = await appsheet.readRows(TURNOS_TABLE);
-      turnosRows = normalizeRows(tmp) || [];
-      turnosRows = turnosRows.filter(r => {
-        const parsed = parseFechaDMY(r.Fecha);
-        if (!parsed) return false;
-        const iso = toISODate(parsed);
-        return iso === toISODate(requestedDate);
-      });
-    }
-
-    // occupied hours
-    const occupied = (turnosRows||[]).flatMap(r => {
-      const h = r.Hora ?? r['Hora'] ?? "";
-      if (Array.isArray(h)) return h.map(normalizeToHM);
-      return String(h||"").split(",").map(x=>normalizeToHM(x)).filter(Boolean);
+    // filtrar por fecha comparando con parseFechaDMY -> toISODate
+    turnosRows = turnosRows.filter(r => {
+      const parsed = parseFechaDMY(r.Fecha);
+      if (!parsed) return false;
+      return toISODate(parsed) === toISODate(requestedDate);
     });
 
-    const horariosDia = disponibilidadMap[String(numero)] || [];
-    const available = horariosDia.filter(h => !occupied.includes(h));
-
-    // comprobar Cancelar Agenda
-    const reqISO = toISODate(requestedDate);
-    const blockedByCancel = (cancelRows||[]).some(r => {
-      const tipo = String(r.Cancelar ?? r["Cancelar"] ?? "").trim().toLowerCase();
-      const diaRaw = r["Día"] ?? r["Dia"] ?? r.Dia;
-      const diaDate = parseFechaDMY(diaRaw);
-      if (diaDate && tipo.includes("un") && toISODate(diaDate) === reqISO) return true;
-      const desdeDate = parseFechaDMY(r.Desde ?? r["Desde"]);
-      const hastaDate = parseFechaDMY(r.Hasta ?? r["Hasta"]);
-      if (desdeDate && hastaDate && requestedDate.getTime() >= desdeDate.getTime() && requestedDate.getTime() <= hastaDate.getTime()) return true;
-      return false;
-    });
-
-    if (blockedByCancel) {
-      return res.status(200).json({ horarios: [], message: "El día ingresado no está disponible, por favor pruebe ingresando otra fecha." });
+    // construir set de horas ocupadas (HH:MM)
+    const occupiedSet = new Set();
+    for (const t of turnosRows) {
+      const hf = t.Hora ?? t['Hora'] ?? t.hora ?? "";
+      let hrs = [];
+      if (Array.isArray(hf)) hrs = hf.map(x => normalizeToHM(x)).filter(Boolean);
+      else hrs = String(hf || "").split(",").map(x => normalizeToHM(x)).filter(Boolean);
+      hrs.forEach(h => { if (h) occupiedSet.add(h); });
     }
+
+    // tomar horarios del día según weekday (1..7)
+    const dayNum = requestedDate.getUTCDay() + 1; // 1..7
+    const horariosDia = disponibilidadMap[String(dayNum)] || [];
+
+    // disponibles = horariosDia menos ocupados
+    const available = horariosDia.filter(h => !occupiedSet.has(h));
 
     return res.status(200).json({ horarios: available });
   } catch (err) {
@@ -142,13 +128,46 @@ export async function getCalendarAvailability(req, res) {
     }
     const disponibilidadMap = {};
     (dispRows || []).forEach(r => {
-      const key = String(r["Número"] ?? r.Numero ?? r.numero ?? "").trim();
+      const keyRaw = String(r["Número"] ?? r.Numero ?? r.numero ?? r["Día"] ?? r.Dia ?? r.Dia ?? "").trim();
       const raw = r["Horarios"] ?? r.Horarios ?? r.horarios ?? "";
       let arr = [];
       if (Array.isArray(raw)) arr = raw.map(x => extractTimeHHMM(x));
       else arr = String(raw || "").split(",").map(x => extractTimeHHMM(x)).filter(Boolean);
-      disponibilidadMap[key] = Array.from(new Set(arr.filter(Boolean)));
+      const uniq = Array.from(new Set(arr.filter(Boolean)));
+
+      // generar múltiples claves posibles para esta fila
+      const keys = new Set();
+      if (keyRaw) {
+        keys.add(keyRaw);
+        const n = Number(keyRaw);
+        if (!isNaN(n)) {
+          // soportar convención 1..7 y 0..6
+          keys.add(String(n));
+          keys.add(String(n - 1));
+          const idx = ((n - 1) + 7) % 7;
+          keys.add(WEEKDAY_NAMES[idx]);
+          keys.add(WEEKDAY_NAMES[idx].toLowerCase());
+        } else {
+          // si es nombre de weekday
+          const idx = WEEKDAY_NAMES.findIndex(w => w.toLowerCase() === keyRaw.toLowerCase());
+          if (idx >= 0) {
+            keys.add(String(idx + 1));
+            keys.add(String(idx));
+            keys.add(WEEKDAY_NAMES[idx]);
+            keys.add(WEEKDAY_NAMES[idx].toLowerCase());
+          }
+        }
+      }
+
+      // asignar same horarios a todas las claves detectadas
+      if (keys.size === 0) {
+        // fallback: guardar bajo clave vacía
+        disponibilidadMap[""] = uniq;
+      } else {
+        for (const k of keys) disponibilidadMap[String(k)] = uniq;
+      }
     });
+    console.log("[getCalendarAvailability] disponibilidadMap sample keys:", Object.keys(disponibilidadMap).slice(0,10));
 
     // --- Leer Cancelar Agenda (fallback find -> read) ---
     let cancelResp = await appsheet.findRows("Cancelar Agenda", `([Cancelar] <> "")`);
@@ -193,7 +212,7 @@ export async function getCalendarAvailability(req, res) {
 
     // group occupied hours per date ISO
     const occupiedByISO = {};
-    (turnosRows || []).forEach(r => {
+    (turnosRows || []).forEach((r) => {
       const fechaParsed = parseFechaDMY(r.Fecha);
       if (!fechaParsed) return;
       const iso = toISODate(fechaParsed);
@@ -206,13 +225,12 @@ export async function getCalendarAvailability(req, res) {
     });
 
     // evaluate each date
-    const weekdayNames = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
     const result = dates.map(d => {
       const iso = formatISO(d);
       const numero = d.getUTCDay() + 1; // 1..7
       const numStr = String(numero);
       // 1) check disponibilidad by weekday
-      const horariosDia = disponibilidadMap[numStr] || disponibilidadMap[String(numero-1)] || disponibilidadMap[weekdayNames[numero-1]] || disponibilidadMap[weekdayNames[numero-1].toLowerCase()] || [];
+      const horariosDia = disponibilidadMap[numStr] || disponibilidadMap[String(numero-1)] || disponibilidadMap[WEEKDAY_NAMES[numero-1]] || disponibilidadMap[WEEKDAY_NAMES[numero-1].toLowerCase()] || [];
       const weekdayBlocked = horariosDia.length === 0;
       // 2) check Cancelar Agenda
       let blockedByCancel = false;
