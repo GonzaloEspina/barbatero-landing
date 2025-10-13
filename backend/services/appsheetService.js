@@ -1,33 +1,21 @@
+import fetch from "node-fetch"; // si ya usas global fetch omitir esta línea
 import dotenv from "dotenv";
-import fetch from "node-fetch";
 dotenv.config();
 
-const APP_ID = process.env.APPSHEET_APP_ID;
-const API_KEY = process.env.APPSHEET_API_KEY;
-const BASE_FROM_ENV = process.env.APPSHEET_BASE_URL;
-const ACCESS_KEY = process.env.APPSHEET_ACCESS_KEY;
+const BASE = process.env.APPSHEET_BASE_URL; // ya tenés en .env
+const APP_KEY = process.env.APPSHEET_APPLICATION_KEY || process.env.APPSHEET_API_KEY || process.env.APPLICATIONACCESSKEY || process.env.APPSHEET_ACCESS_KEY;
 
-// Construir base: si pasaste APPSHEET_BASE_URL (por ejemplo "https://api.appsheet.com/api/v2/apps/<APP_ID>")
-// úsala tal cual (sin slash final), si no, usar APP_ID para formar la URL.
-const BASE = (BASE_FROM_ENV && BASE_FROM_ENV.replace(/\/$/, "")) ||
-             (APP_ID ? `https://api.appsheet.com/api/v2/apps/${APP_ID}` : "https://api.appsheet.com/api/v2/apps");
-
-const API_KEY_USED = API_KEY || ACCESS_KEY;
-
-if ((!APP_ID && !BASE_FROM_ENV) || !API_KEY_USED) {
-  console.warn("AppSheet env: falta APPSHEET_BASE_URL o APPSHEET_APP_ID / falta APPSHEET_ACCESS_KEY o APPSHEET_API_KEY");
+if (!BASE) {
+  console.warn("AppSheet env: falta APPSHEET_BASE_URL");
 }
 
 async function doAction(tableName, body) {
-  const base = BASE_FROM_ENV || `https://api.appsheet.com/api/v2/apps/${APP_ID}`;
+  const base = BASE;
   const url = `${base}/tables/${encodeURIComponent(tableName)}/Action`;
   const headers = {
     "Content-Type": "application/json",
-    "ApplicationAccessKey": ACCESS_KEY || API_KEY || "",
   };
-  if (APP_ID) headers["ApplicationId"] = APP_ID;
-  if (API_KEY) headers["Authorization"] = `ApiKey ${API_KEY}`;
-
+  if (APP_KEY) headers.ApplicationAccessKey = APP_KEY;
   console.log("[AppSheet] POST", url, "body:", JSON.stringify(body));
   console.log("[AppSheet] request headers:", headers);
 
@@ -76,9 +64,25 @@ export async function findRows(table, filter) {
  * Agregar fila nueva
  * newRow: objeto con columnas
  */
-export async function addRow(table, row) {
-  const body = { Action: "Add", Properties: {}, Rows: [row] };
-  return await doAction(table, body);
+export async function addRow(table, rowObject) {
+  if (!BASE) throw new Error("APPSHEET_BASE_URL no configurado");
+  const url = `${BASE.replace(/\/$/, "")}/tables/${encodeURIComponent(table)}/Action`;
+  const body = {
+    Action: "Add",
+    Properties: {},
+    Rows: [rowObject]
+  };
+  const headers = {
+    "Content-Type": "application/json",
+  };
+  if (APP_KEY) headers.ApplicationAccessKey = APP_KEY;
+  const resp = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
+  if (!resp.ok) {
+    const txt = await resp.text().catch(()=>null);
+    throw new Error(`AppSheet addRow failed status=${resp.status} body=${txt}`);
+  }
+  const json = await resp.json().catch(() => null);
+  return json;
 }
 
 /**

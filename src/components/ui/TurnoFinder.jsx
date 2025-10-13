@@ -52,6 +52,15 @@ export default function TurnoFinder() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  // registro inline cuando no se encuentra el cliente
+  const [registerMode, setRegisterMode] = useState(false);
+  const [registerPrefill, setRegisterPrefill] = useState({});
+  // ahora un solo campo "Nombre y Apellido"
+  const [registerForm, setRegisterForm] = useState({ Nombre: "", Telefono: "", Correo: "" });
+  const [registerLoading, setRegisterLoading] = useState(false);
+  const [registerError, setRegisterError] = useState("");
+  // mensaje amigable / invitación a registrarse (no se usa setError para esto)
+  const [registerPrompt, setRegisterPrompt] = useState("");
 
   // fechas: ahora usamos el string ISO recibido del backend (YYYY-MM-DD) sin formateo adicional
   const [fecha, setFecha] = useState(""); // ISO string (YYYY-MM-DD) para enviar
@@ -98,6 +107,7 @@ export default function TurnoFinder() {
     if (!contacto) { setError("Ingrese un correo."); return; }
     setLoading(true);
     setCliente(null); setUpcoming([]); setError(""); setClientNotFound(false);
+    setRegisterMode(false); setRegisterPrefill({}); setRegisterForm({ Nombre: "", Telefono: "", Correo: "" }); setRegisterError(""); setRegisterPrompt("");
     try {
       const res = await fetch("/api/turnos/find-client", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contacto })
@@ -108,8 +118,16 @@ export default function TurnoFinder() {
         setUpcoming(Array.isArray(data.upcoming) ? data.upcoming.map(t => ({ ...t, Hora: onlyHHMM(t.Hora) })) : []);
         setClientNotFound(false);
       } else {
-        setError(data.message || "No se encontró cliente con ese correo.");
+        // no mostrar el mensaje en "error" rojo; en su lugar mostrar prompt amigable + formulario
+        setError("");
         setClientNotFound(true);
+        setRegisterMode(true);
+        setRegisterPrefill(data.prefill || {});
+        // prefill: si vino Correo o Telefono en prefill, asignar a nuestro campo único
+        const pf = data.prefill || {};
+        const namePrefill = pf.Nombre || pf["Nombre y Apellido"] || "";
+        setRegisterForm(prev => ({ ...prev, Nombre: namePrefill, Telefono: pf.Telefono || pf.Telefono || "", Correo: pf.Correo || "" }));
+        setRegisterPrompt(data.message || "No se encontró el contacto. Completá tus datos para sacar un turno.");
       }
     } catch {
       setError("Error de conexión al backend.");
@@ -304,10 +322,10 @@ export default function TurnoFinder() {
 
       <div className="flex gap-2 mb-4">
         <input
-          type="email"
+          type="text"
           value={contacto}
           onChange={(e) => setContacto(e.target.value)}
-          placeholder="Ingrese correo del cliente"
+          placeholder="Ingrese correo o teléfono"
           className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800"
         />
         <button onClick={buscarCliente} className="px-4 py-2 bg-blue-600 text-white rounded-md font-semibold hover:bg-blue-700 transition-colors">
@@ -316,6 +334,68 @@ export default function TurnoFinder() {
       </div>
 
       {error && <p className="text-red-600 text-center mb-4">{error}</p>}
+
+      {/* Formulario de registro mostrado si no se encontró el cliente */}
+      {registerMode && (
+        <div className="max-w-lg mx-auto mb-6 p-4 border rounded bg-gradient-to-r from-blue-50 to-white">
+          <p className="text-blue-800 font-semibold mb-3">No se encontró el contacto ingresado. Registrate para poder sacar un turno.</p>
+          {/* Se muestra sólo el encabezado amigable; no duplicar el mensaje dentro del formulario */}
+          <div className="space-y-2">
+            <input
+              placeholder="Nombre y Apellido"
+              value={registerForm.Nombre}
+              onChange={e => setRegisterForm(f => ({ ...f, Nombre: e.target.value }))}
+              className="w-full p-2 border rounded"
+            />
+            <input
+              placeholder="Teléfono"
+              value={registerForm.Telefono}
+              onChange={e => setRegisterForm(f => ({ ...f, Telefono: e.target.value }))}
+              className="w-full p-2 border rounded"
+            />
+            <input
+              placeholder="Correo"
+              value={registerForm.Correo}
+              onChange={e => setRegisterForm(f => ({ ...f, Correo: e.target.value }))}
+              className="w-full p-2 border rounded"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={async () => {
+                  setRegisterError(""); setRegisterLoading(true);
+                  if (!registerForm.Nombre) { setRegisterError("Complete Nombre y Apellido"); setRegisterLoading(false); return; }
+                  if (!registerForm.Telefono && !registerForm.Correo) { setRegisterError("Complete Teléfono o Correo"); setRegisterLoading(false); return; }
+                  try {
+                    const res = await fetch("/api/clients/create", {
+                      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(registerForm)
+                    });
+                    const json = await res.json().catch(()=>({}));
+                    if (res.ok && json.ok) {
+                      // usar cliente creado para continuar flujo
+                      setCliente(json.client || registerForm);
+                      setUpcoming(Array.isArray(json.upcoming) ? json.upcoming : []);
+                      setRegisterMode(false);
+                      setRegisterPrefill({});
+                      setRegisterForm({ Nombre: "", Telefono: "", Correo: "" });
+                      setError("");
+                    } else {
+                      setRegisterError(json.message || "No se pudo crear cliente.");
+                    }
+                  } catch (e) {
+                    setRegisterError("Error al crear cliente.");
+                  } finally { setRegisterLoading(false); }
+                }}
+                className="px-4 py-2 bg-green-600 text-white rounded"
+                disabled={registerLoading}
+              >
+                {registerLoading ? "Creando..." : "Crear y continuar"}
+              </button>
+              <button onClick={() => { setRegisterMode(false); setRegisterError(""); }} className="px-4 py-2 border rounded">Cancelar</button>
+            </div>
+            {registerError && <div className="text-red-600 mt-2">{registerError}</div>}
+          </div>
+        </div>
+      )}
 
       {cliente && (
         <div className="border border-gray-300 rounded-lg p-6 shadow-md bg-gray-50 text-gray-800">
@@ -484,6 +564,147 @@ export default function TurnoFinder() {
               )}
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Componente de búsqueda/registro de cliente (named export para evitar dos default exports en el mismo archivo)
+export function ClientSearchAndRegister({ onClientReady }) {
+  const [contacto, setContacto] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [registerMode, setRegisterMode] = useState(false);
+  const [contactType, setContactType] = useState(null); // "correo" | "teléfono"
+  const [prefill, setPrefill] = useState({});
+  const [form, setForm] = useState({ Nombre: "", Apellido: "", Telefono: "", Correo: "" });
+  const [serverMsg, setServerMsg] = useState("");
+
+  async function handleSearch(e) {
+    e?.preventDefault();
+    setErrorMsg(""); setServerMsg(""); setRegisterMode(false);
+    if (!contacto) { setErrorMsg("Ingrese correo o teléfono"); return; }
+    setLoading(true);
+    try {
+      const resp = await fetch("/api/turnos/find-client", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contacto })
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (resp.ok && data.found) {
+        setRegisterMode(false);
+        setServerMsg("");
+        if (onClientReady) onClientReady({ client: data.client, upcoming: data.upcoming });
+      } else {
+        setRegisterMode(true);
+        setContactType(data.contactType || (/@/.test(contacto) ? "correo" : "teléfono"));
+        setPrefill(data.prefill || {});
+        setForm(prev => ({ ...prev, ...(data.prefill || {}) }));
+        setServerMsg(data.message || `No se encontró el ${data.contactType || "contacto"} ingresado.`);
+      }
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Error de conexión");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleCreate(e) {
+    e?.preventDefault();
+    setServerMsg(""); setErrorMsg("");
+    if (!form.Nombre || !form.Apellido) { setErrorMsg("Complete Nombre y Apellido"); return; }
+    if (!form.Telefono && !form.Correo) { setErrorMsg("Complete Teléfono o Correo"); return; }
+    setLoading(true);
+    try {
+      const res = await fetch("/api/clients/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form)
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) {
+        setServerMsg("Cliente creado correctamente.");
+        setRegisterMode(false);
+        if (onClientReady) onClientReady({ client: data.client });
+      } else {
+        setErrorMsg(data.message || "No se pudo crear cliente.");
+      }
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Error al crear cliente.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div>
+      <form onSubmit={handleSearch} style={{ marginBottom: 12 }}>
+        <input
+          type="text"
+          placeholder="Correo o Teléfono"
+          value={contacto}
+          onChange={e => setContacto(e.target.value)}
+          style={{ width: 300, padding: 8 }}
+        />
+        <button type="submit" disabled={loading} style={{ marginLeft: 8 }}>
+          {loading ? "..." : "Buscar"}
+        </button>
+      </form>
+
+      {errorMsg && <div style={{ color: "red", marginBottom: 8 }}>{errorMsg}</div>}
+
+      {registerMode && (
+        <div style={{ border: "1px solid #ddd", padding: 12, maxWidth: 420 }}>
+          <div style={{ color: "darkred", marginBottom: 8 }}>
+            No se encontró el {contactType} ingresado, por favor complete sus datos para sacar un turno.
+          </div>
+
+          <form onSubmit={handleCreate}>
+            <div style={{ marginBottom: 8 }}>
+              <input
+                placeholder="Nombre"
+                value={form.Nombre}
+                onChange={e => setForm(f => ({ ...f, Nombre: e.target.value }))}
+                style={{ width: "100%", padding: 8 }}
+              />
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <input
+                placeholder="Apellido"
+                value={form.Apellido}
+                onChange={e => setForm(f => ({ ...f, Apellido: e.target.value }))}
+                style={{ width: "100%", padding: 8 }}
+              />
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <input
+                placeholder="Teléfono"
+                value={form.Telefono}
+                onChange={e => setForm(f => ({ ...f, Telefono: e.target.value }))}
+                style={{ width: "100%", padding: 8 }}
+              />
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <input
+                placeholder="Correo"
+                value={form.Correo}
+                onChange={e => setForm(f => ({ ...f, Correo: e.target.value }))}
+                style={{ width: "100%", padding: 8 }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="submit" disabled={loading}>Crear y continuar</button>
+              <button type="button" onClick={() => setRegisterMode(false)}>Cancelar</button>
+            </div>
+
+            {serverMsg && <div style={{ color: "green", marginTop: 8 }}>{serverMsg}</div>}
+            {errorMsg && <div style={{ color: "red", marginTop: 8 }}>{errorMsg}</div>}
+          </form>
         </div>
       )}
     </div>

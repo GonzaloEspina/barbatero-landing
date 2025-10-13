@@ -152,10 +152,31 @@ export async function findClient(req, res) {
       console.log("[findClient] fallback readRows clientes count:", allRows.length);
     }
 
-    if (!rows || rows.length === 0) return res.status(200).json({ found: false, message: "No se encontró cliente con ese contacto." });
+    // Si no encontramos ningún cliente: devolver info para que el front muestre formulario de registro
+    if (!rows || rows.length === 0) {
+      const contactType = emailMode ? "correo" : "teléfono";
+      const prefill = emailMode ? { Correo: input } : { Telefono: input };
+      const message = `No se encontró el ${contactType} ingresado, por favor complete sus datos para sacar un turno.`;
+      return res.status(200).json({ found: false, contactType, prefill, message });
+    }
 
     const client = rows[0];
     const clientRowId = extractClientRowId(client);
+
+    // Normalizar correo: buscar entre varias columnas y asignar sólo si es email válido.
+    // Si no hay email válido, dejar vacío y limpiar otras posibles columnas de email
+    const emailCols = ['Correo','Email','Mail','mail','correo','email'];
+    let foundEmail = "";
+    for (const col of emailCols) {
+      const v = valueToString(client[col] ?? "");
+      if (isEmail(v.trim())) { foundEmail = v.trim(); break; }
+    }
+    client.Correo = foundEmail || "";
+    // limpiar duplicados/otras columnas para evitar que el front muestre el teléfono en ellas
+    for (const col of emailCols) {
+      if (col === 'Correo') continue;
+      client[col] = client.Correo ? client.Correo : "";
+    }
 
     // obtener turnos del cliente (filtrado localmente por seguridad)
     let upcoming = [];
@@ -249,15 +270,38 @@ export async function findClient(req, res) {
 export async function createClient(req, res) {
   try {
     const payload = req.body || {};
-    // Validación mínima
-    if (!payload.Nombre && !payload.Telefono && !payload.Correo) {
-      return res.status(400).json({ ok: false, message: "Faltan datos: Nombre, Teléfono o Correo." });
+
+    // campo único "Nombre y Apellido"
+    const fullName = (payload["Nombre y Apellido"] ?? payload.Nombre ?? payload.name ?? "").toString().trim();
+    const telefono = (payload["Teléfono"] ?? payload.Telefono ?? payload.telefono ?? payload.phone ?? "").toString().trim();
+    const correo = (payload["Correo"] ?? payload.Correo ?? payload.correo ?? payload.email ?? "").toString().trim();
+
+    if (!fullName) return res.status(400).json({ ok: false, message: "Faltan datos: Nombre y Apellido." });
+    if (!telefono && !correo) return res.status(400).json({ ok: false, message: "Faltan datos: Teléfono o Correo." });
+
+    // construir fila con los nombres EXACTOS de las columnas
+    const row = {
+      "Nombre y Apellido": fullName,
+      "Teléfono": telefono,
+      "Correo": correo,
+      "¿Puede sacar múltiples turnos?": "No"
+    };
+
+    if (typeof appsheet.addRow === "function") {
+      try {
+        const addedRaw = await appsheet.addRow(CLIENTES_TABLE, row);
+        const created = normalizeRows(addedRaw) || [];
+        const client = (created && created[0]) ? created[0] : row;
+        return res.status(201).json({ ok: true, client, raw: addedRaw });
+      } catch (e) {
+        console.error("[createClient] appsheet.addRow error:", e);
+        return res.status(201).json({ ok: true, client: row, raw: null, message: "Cliente no persistido: addRow falló." });
+      }
     }
 
-    // Si tenés una función para crear filas en appsheet, usarla aquí.
-    // Por ahora devolvemos el payload recibido como confirmación.
-    console.log("[createClient] payload:", payload);
-    return res.status(201).json({ ok: true, client: payload, message: "createClient: stub (implementar persistencia si hace falta)" });
+    // fallback si addRow no está disponible
+    console.warn("[createClient] appsheet.addRow no disponible");
+    return res.status(201).json({ ok: true, client: row, raw: null, message: "Cliente no persistido (addRow no disponible)." });
   } catch (err) {
     console.error("[createClient] error:", err);
     return res.status(500).json({ ok: false, message: "Error al crear cliente." });
