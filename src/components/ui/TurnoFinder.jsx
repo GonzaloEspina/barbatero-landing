@@ -40,6 +40,56 @@ const formatDateForDisplay = (s) => {
   return v;
 };
 
+// helper robusto para parsear fechas recibidas (intenta ISO, DD/MM/YYYY y MM/DD/YYYY)
+// devuelve Date o null
+const tryParseDate = (input) => {
+  if (!input) return null;
+  const s = String(input).trim();
+  // ISO YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(s + "T00:00:00");
+  // barras: A/B/C
+  const slash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (slash) {
+    const p1 = Number(slash[1]), p2 = Number(slash[2]), p3raw = slash[3];
+    const year = p3raw.length === 2 ? (Number(p3raw) > 70 ? 1900 + Number(p3raw) : 2000 + Number(p3raw)) : Number(p3raw);
+    // heurística: si el primer componente > 12 -> es día (DD/MM/YYYY)
+    if (p1 > 12) {
+      const d = new Date(year, p2 - 1, p1);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    // si segundo componente > 12 -> es día (MM/DD/YYYY improbable, pero por si acaso)
+    if (p2 > 12) {
+      const d = new Date(year, p1 - 1, p2);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    // ambos <=12 (ambiguous): asumir MM/DD/YYYY (coincide con datos que ves del backend)
+    const d2 = new Date(year, p1 - 1, p2);
+    return isNaN(d2.getTime()) ? null : d2;
+  }
+  // intentos adicionales: soporte con guiones YYYY/MM/DD o DD-MM-YYYY
+  const dashIso = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
+  if (dashIso) {
+    const y = Number(dashIso[1]), m = Number(dashIso[2]), d = Number(dashIso[3]);
+    const dd = new Date(y, m - 1, d);
+    return isNaN(dd.getTime()) ? null : dd;
+  }
+  const dashAmb = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})$/);
+  if (dashAmb) {
+    // aplicar misma heurística que con slash
+    const p1 = Number(dashAmb[1]), p2 = Number(dashAmb[2]), p3raw = dashAmb[3];
+    const year = p3raw.length === 2 ? (Number(p3raw) > 70 ? 1900 + Number(p3raw) : 2000 + Number(p3raw)) : Number(p3raw);
+    if (p1 > 12) {
+      const d = new Date(year, p2 - 1, p1);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    const d2 = new Date(year, p1 - 1, p2);
+    return isNaN(d2.getTime()) ? null : d2;
+  }
+  // fallback: Date builtin
+  const dt = new Date(s);
+  return isNaN(dt.getTime()) ? null : dt;
+};
+
 // --- REMOVED custom frontend date formatting helpers ---
 // Ya no se usa formatDateDDMMYY ni parseFechaToDate ni formatDateISOLocal.
 // El frontend usa el iso tal cual que devuelve el backend (YYYY-MM-DD) en calendarDays[].iso
@@ -132,7 +182,18 @@ export default function TurnoFinder() {
       const data = await res.json();
       if (res.ok && data.found) {
         setCliente(data.client);
-        setUpcoming(Array.isArray(data.upcoming) ? data.upcoming.map(t => ({ ...t, Hora: onlyHHMM(t.Hora) })) : []);
+
+        // safe sort + map: si sortUpcoming falla caemos al arreglo original
+        try {
+          const raw = Array.isArray(data.upcoming) ? data.upcoming : [];
+          const sorted = (typeof sortUpcoming === "function") ? sortUpcoming(raw) : raw;
+          setUpcoming(Array.isArray(sorted) ? sorted.map(t => ({ ...t, Hora: onlyHHMM(t.Hora) })) : raw.map(t => ({ ...t, Hora: onlyHHMM(t.Hora) })));
+        } catch (e) {
+          console.error("[buscarCliente] sortUpcoming error:", e);
+          const raw = Array.isArray(data.upcoming) ? data.upcoming : [];
+          setUpcoming(raw.map(t => ({ ...t, Hora: onlyHHMM(t.Hora) })));
+        }
+
         setMembresias(Array.isArray(data.memberships) ? data.memberships : []);
         setClientNotFound(false);
       } else {
@@ -207,22 +268,49 @@ export default function TurnoFinder() {
     })();
   };
 
-  // helper local por seguridad (asegura HH:MM)
-  const onlyHHMM = (h) => {
-    if (h === null || h === undefined) return "";
-    // normalizar a string y limpiar NBSP
-    const s = String(h).replace(/\u00A0/g, " ").trim();
-    // si normalizeToHM entrega ya HH:MM válido, retornarlo
-    try {
-      const fromUtil = normalizeToHM(h);
-      if (fromUtil && /^\d{1,2}:\d{2}$/.test(fromUtil)) return fromUtil.padStart(5, "0");
-    } catch {}
-    // buscar primer patrón HH:MM (acepta seguido opcionalmente :SS)
-    const m = s.match(/(\d{1,2}:\d{2})(?::\d{2})?/);
-    if (m) return m[1].padStart(5, "0");
-    // fallback: devolver el string original (trimmed)
-    return s;
-  };
+  // helper para extraer HH:MM para display (sin modificar backend)
+// y para parsear horas (incluye segundos) a minutos para ordenar
+const onlyHHMM = (h) => {
+  if (h === null || h === undefined) return "";
+  const s = String(h).replace(/\u00A0/g, " ").trim();
+  try {
+    const fromUtil = normalizeToHM(h);
+    if (fromUtil && /^\d{1,2}:\d{2}$/.test(fromUtil)) return fromUtil.padStart(5, "0");
+  } catch {}
+  const m = s.match(/(\d{1,2}:\d{2})(?::\d{2})?/);
+  if (m) return m[1].padStart(5, "0");
+  return s;
+};
+
+// parsea un string de hora "HH:MM" o "HH:MM:SS" a minutos desde medianoche (numérico) para ordenar
+const parseHoraToMinutes = (h) => {
+  if (!h && h !== 0) return 0;
+  const s = String(h).trim();
+  const m = s.match(/^\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*$/);
+  if (!m) return 0;
+  const hh = Number(m[1]) || 0;
+  const mm = Number(m[2]) || 0;
+  return hh * 60 + mm;
+};
+
+// helper para ordenar próximos turnos por Fecha y por Hora (usa tryParseDate y parseHoraToMinutes)
+const sortUpcoming = (items) => {
+  if (!Array.isArray(items)) return [];
+  const parseSafeDate = (s) => tryParseDate(s);
+
+  return items
+    .map(t => ({ ...t, Fecha: String(t.Fecha ?? t.fecha ?? ""), Hora: String(t.Hora ?? t.hora ?? "") }))
+    .sort((a, b) => {
+      const da = parseSafeDate(a.Fecha) || new Date(a.Fecha || "");
+      const db = parseSafeDate(b.Fecha) || new Date(b.Fecha || "");
+      const ta = da && !isNaN(da.getTime()) ? da.getTime() : 0;
+      const tb = db && !isNaN(db.getTime()) ? db.getTime() : 0;
+      if (ta !== tb) return ta - tb;
+      const ma = parseHoraToMinutes(a.Hora);
+      const mb = parseHoraToMinutes(b.Hora);
+      return ma - mb;
+    });
+};
 
   // seleccionar fecha desde calendario: usamos iso tal cual
   const selectFecha = async (iso, payload) => {
@@ -299,6 +387,13 @@ export default function TurnoFinder() {
         horaParaEnviar = (/^\d{1,2}:\d{2}$/.test(hhmm0)) ? `${hhmm0}:00` : hhmm0;
       }
 
+      // detectar membresía activa (si existe) y tomar su Row ID para enviar en la columna "Membresía ID"
+      const activeMemb = (Array.isArray(membresias) ? membresias : []).find(m => {
+        const s = String(m?.Estado ?? m?.["Estado"] ?? m?.estado ?? "").trim().toLowerCase();
+        return s === "activa";
+      });
+      const membershipRowId = activeMemb ? (activeMemb["Row ID"] || activeMemb.RowID || activeMemb["RowID"] || activeMemb.id || null) : null;
+
       const payload = {
         contacto,
         clienteRowId,
@@ -306,6 +401,9 @@ export default function TurnoFinder() {
         Fecha: fecha, // ISO string enviado tal cual
         Hora: horaParaEnviar,
         Servicio: servicio
+        ,
+        // columna adicional: id de la membresía activa si existe
+        "Membresía ID": membershipRowId
       };
 
       const res = await fetch("/api/turnos/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -393,7 +491,15 @@ export default function TurnoFinder() {
                     if (res.ok && json.ok) {
                       // usar cliente creado para continuar flujo
                       setCliente(json.client || registerForm);
-                      setUpcoming(Array.isArray(json.upcoming) ? json.upcoming : []);
+                      try {
+                        const raw = Array.isArray(json.upcoming) ? json.upcoming : [];
+                        const sorted = (typeof sortUpcoming === "function") ? sortUpcoming(raw) : raw;
+                        setUpcoming(Array.isArray(sorted) ? sorted : raw);
+                      } catch (e) {
+                        console.error("[create client] sortUpcoming error:", e);
+                        setUpcoming(Array.isArray(json.upcoming) ? json.upcoming : []);
+                      }
+
                       setRegisterMode(false);
                       setRegisterPrefill({});
                       setRegisterForm({ Nombre: "", Telefono: "", Correo: "" });
@@ -423,7 +529,6 @@ export default function TurnoFinder() {
             <div className="flex items-start justify-between">
               <div>
                 <h3 className="text-lg font-bold">Tus datos</h3>
-                <p className="text-sm text-gray-300 mt-1">Revisá y editá si hace falta antes de sacar el turno.</p>
               </div>
               <div>
                 {!editingClient && (
@@ -461,24 +566,7 @@ export default function TurnoFinder() {
                     </div>
                   )}
                 </div>
-                                          {/* Mostrar acción para sacar turno (respeta la regla de allowsMultiple / within30Days) */}
-                        <div className="mt-3">
-                          {allowsMultiple ? (
-                            <button onClick={() => openModal()} className="px-4 py-2 bg-blue-600 text-white rounded-md">
-                              Sacar otro turno
-                            </button>
-                          ) : (
-                             within30Days ? (
-                               <div className="text-sm text-yellow-300">
-                                 Ya tenés un turno en los próximos 30 días. Si necesitás sacar otro, contactanos por Whatsapp.
-                               </div>
-                             ) : (
-                              <button onClick={() => openModal()} className="px-4 py-2 bg-blue-600 text-white rounded-md">
-                                 Sacar turno
-                               </button>
-                             )
-                           )}
-                         </div>
+
                 {/* Membresías activas / CTA */}
                 {(() => {
                   const clientRowId = cliente && (cliente["Row ID"] || cliente.RowID || cliente._RowNumber || cliente.id || cliente.Key || "");
@@ -486,7 +574,7 @@ export default function TurnoFinder() {
                   // Normalizar estados (usar la columna "Estado" que definiste en AppSheet)
                   const getEstado = (m) => String(m?.Estado ?? m?.["Estado"] ?? m?.estado ?? "").trim().toLowerCase();
 
-                  const hasActive = Array.isArray(membresias) && membresias.some(m => getEstado(m).includes("activa"));
+                  const hasActive = Array.isArray(membresias) && membresias.some(m => getEstado(m) === "activa");
                   const hasPending = Array.isArray(membresias) && membresias.some(m => getEstado(m).includes("pendiente"));
 
                   // --- nueva lógica: permite sacar múltiples turnos según columna Cliente["¿Puede sacar múltiples turnos?"]
@@ -509,11 +597,46 @@ export default function TurnoFinder() {
                     });
                   })();
 
+                  // --- acción de sacar turno / mensaje (SIEMPRE mostrar antes de la sección de membresías)
+                  const actionArea = (
+                    <div className="mt-4 mb-2">
+                      {allowsMultiple ? (
+                        <button onClick={() => openModal()} className="px-4 py-2 bg-blue-600 text-white rounded-md">
+                          Sacar otro turno
+                        </button>
+                      ) : (
+                        within30Days ? (
+                          <div className="flex items-center justify-between gap-3">
+  <div className="text-sm text-yellow-300">
+    Para sacar otro turno dentro de los próximos 30 días,
+    <a
+      href={`https://wa.me/5491160220978?text=${encodeURIComponent("Hola, quiero sacar otro turno")}`}
+      target="_blank"
+      rel="noreferrer"
+      className="ml-1 underline text-yellow-100 hover:text-white"
+      aria-label="Escribir por Whatsapp"
+    >
+      escribinos por Whatsapp.
+    </a>
+  </div>
+</div>
+                        ) : (
+                          <button onClick={() => openModal()} className="px-4 py-2 bg-blue-600 text-white rounded-md">
+                            Sacar turno
+                          </button>
+                        )
+                      )}
+                    </div>
+                  );
+
                   // Si hay membresía pendiente mostramos la sección "Membresías Activas" con estado pendiente
                   if (hasPending) {
                     const pending = (membresias || []).filter(m => getEstado(m).includes("pendiente"));
                     return (
                       <div className="mt-4">
+                        {/* Acciones (botón / mensaje) arriba */}
+                        {actionArea}
+
                         <h4 className="text-sm font-semibold text-gray-200 mb-2">Membresía Activa</h4>
                         {pending.map((m, idx) => {
                           const alias = "barbatero.mp";
@@ -582,45 +705,31 @@ export default function TurnoFinder() {
                     );
                   }
 
-                  // Si NO tiene membresía activa ni pendiente mostramos solo el CTA (sin encabezado)
+                  // Si NO tiene membresía activa ni pendiente mostramos acciones y el CTA (sin encabezado)
                   if (!hasActive && !hasPending) {
                     return (
                       <div className="mt-4 mb-4">
-                        <MembershipCTA clientRowId={clientRowId} hasActive={hasActive} hasPending={hasPending} />
-                        {/* Mensaje secundario */}
-                        <div className="text-sm text-gray-400 mt-3">No tenés una membresía activa.</div>
+                        {/* Acciones (botón / mensaje) arriba */}
+                        {actionArea}
 
-                        {/* botón para sacar turno: si permite múltiples, mostrar siempre; si no, mostrar solo si NO hay turno en próximos 30 días */}
-                        <div className="mt-3">
-                          {allowsMultiple ? (
-                            <button onClick={() => openModal()} className="px-4 py-2 bg-blue-600 text-white rounded-md">
-                              Sacar otro turno
-                            </button>
-                          ) : (
-                            within30Days ? (
-                              <div className="text-sm text-yellow-300">
-                                Ya tenés un turno en los próximos 30 días. Si necesitás sacar otro, contactanos por Whatsapp.
-                              </div>
-                            ) : (
-                              <button onClick={() => openModal()} className="px-4 py-2 bg-blue-600 text-white rounded-md">
-                                Sacar turno
-                              </button>
-                            )
-                          )}
-                        </div>
+                        <MembershipCTA clientRowId={clientRowId} hasActive={hasActive} hasPending={hasPending} />
+
                       </div>
                     );
                   }
 
-                  // Si tiene al menos una activa, mostramos encabezado y lista como antes
+                  // Si tiene al menos una activa, mostramos acciones + encabezado y lista como antes
                   return (
                     <div className="mt-4">
+                      {/* Acciones (botón / mensaje) arriba */}
+                      {actionArea}
+
                       <h4 className="text-sm font-semibold text-gray-200 mb-2">Membresía activa</h4>
-                      {membresias.filter(m => getEstado(m).includes("activa")).map((m, idx) => (
+                      {membresias.filter(m => getEstado(m) === "activa").map((m, idx) => (
                         <div key={idx} className="bg-gradient-to-r from-green-900 to-gray-800 p-3 rounded-md mb-2">
                           <div className="text-sm text-gray-100 font-semibold">{m.Membresía}</div>
-                          <div className="text-xs text-gray-300">Inicio: <span className="font-medium text-gray-200">{m["Fecha de Inicio"]}</span></div>
-                          <div className="text-xs text-gray-300">Vencimiento: <span className="font-medium text-gray-200">{m.Vencimiento}</span></div>
+                          <div className="text-xs text-gray-300">Inicio: <span className="font-medium text-gray-200">{formatDateForDisplay(m["Fecha de Inicio"])}</span></div>
+                          <div className="text-xs text-gray-300">Vencimiento: <span className="font-medium text-gray-200">{formatDateForDisplay(m.Vencimiento)}</span></div>
                           <div className="text-xs text-gray-300 mt-1">Turnos restantes: <span className="font-medium text-green-200">{m["Turnos Restantes"]}</span></div>
                         </div>
                       ))}
@@ -916,3 +1025,32 @@ export function ClientSearchAndRegister({ onClientReady }) {
     </div>
   );
 }
+
+// helper para ordenar próximos turnos por Fecha (YYYY-MM-DD u otros) y por Hora (HH:MM / HH:MM:SS)
+// devuelve nueva lista ordenada
+const sortUpcoming = (items) => {
+  if (!Array.isArray(items)) return [];
+  const parseSafeDate = (s) => {
+    if (!s) return null;
+    try { return parseDateFromString(s); } catch (e) { const d = new Date(s); return isNaN(d) ? null : d; }
+  };
+  const normalizeHora = (h) => {
+    const hh = onlyHHMM(h || "");
+    const parts = hh.split(":").map(p => Number(p || 0));
+    return { hh: parts[0] || 0, mm: parts[1] || 0 };
+  };
+
+  return items
+    .map(t => ({ ...t, Fecha: String(t.Fecha ?? t.fecha ?? ""), Hora: String(t.Hora ?? t.hora ?? "") }))
+    .sort((a, b) => {
+      const da = parseSafeDate(a.Fecha) || new Date(a.Fecha || "");
+      const db = parseSafeDate(b.Fecha) || new Date(b.Fecha || "");
+      const ta = da && !isNaN(da.getTime()) ? da.getTime() : 0;
+      const tb = db && !isNaN(db.getTime()) ? db.getTime() : 0;
+      if (ta !== tb) return ta - tb;
+      const na = normalizeHora(a.Hora);
+      const nb = normalizeHora(b.Hora);
+      if (na.hh !== nb.hh) return na.hh - nb.hh;
+      return na.mm - nb.mm;
+    });
+};
