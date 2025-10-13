@@ -85,6 +85,28 @@ export async function addRow(table, rowObject) {
   return json;
 }
 
+// Agregar updateRow (Action: "Edit") - rowObject debe incluir "Row ID"
+export async function updateRow(table, rowObject) {
+  if (!BASE) throw new Error("APPSHEET_BASE_URL no configurado");
+  const url = `${BASE.replace(/\/$/, "")}/tables/${encodeURIComponent(table)}/Action`;
+  const body = {
+    Action: "Edit",
+    Properties: {},
+    Rows: [rowObject]
+  };
+  const headers = {
+    "Content-Type": "application/json",
+  };
+  if (APP_KEY) headers.ApplicationAccessKey = APP_KEY;
+  const resp = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
+  if (!resp.ok) {
+    const txt = await resp.text().catch(() => null);
+    throw new Error(`AppSheet updateRow failed status=${resp.status} body=${txt}`);
+  }
+  const json = await resp.json().catch(() => null);
+  return json;
+}
+
 /**
  * Buscar cliente por correo electrónico
  */

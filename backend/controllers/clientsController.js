@@ -307,3 +307,76 @@ export async function createClient(req, res) {
     return res.status(500).json({ ok: false, message: "Error al crear cliente." });
   }
 }
+
+// Nuevo endpoint: actualizar cliente
+export async function updateClient(req, res) {
+  try {
+    const payload = req.body || {};
+    const rowId = payload["Row ID"] ?? payload.rowId ?? payload.RowID ?? payload.id ?? payload.idRow;
+    if (!rowId) return res.status(400).json({ ok: false, message: "Falta Row ID del cliente." });
+
+    const esc = v => String(v || "").replace(/"/g, '\\"');
+
+    // intentar obtener la fila actual para conocer valores previos
+    let existing = null;
+    try {
+      const resp = await appsheet.findRows(CLIENTES_TABLE, `([Row ID] = "${esc(rowId)}")`);
+      const rows = normalizeRows(resp) || [];
+      existing = rows[0] || null;
+    } catch (e) {
+      console.warn("[updateClient] findRows falló, intentando readRows fallback", e?.message ?? e);
+      const all = await appsheet.readRows(CLIENTES_TABLE);
+      const rows = normalizeRows(all) || [];
+      existing = rows.find(r => {
+        const rid = valueToString(r["Row ID"] ?? r.RowID ?? r["RowID"] ?? r["Row Id"] ?? "");
+        return rid && rid === String(rowId);
+      }) || null;
+    }
+
+    const existingTelefono = valueToString(existing?.["Teléfono"] ?? existing?.Telefono ?? "").trim();
+    const existingCorreo = valueToString(existing?.["Correo"] ?? existing?.Correo ?? "").trim();
+
+    // valores enviados (pueden ser empty string -> significa borrar)
+    const telefonoProvided = Object.prototype.hasOwnProperty.call(payload, "Teléfono") || Object.prototype.hasOwnProperty.call(payload, "Telefono") || Object.prototype.hasOwnProperty.call(payload, "telefono") || Object.prototype.hasOwnProperty.call(payload, "phone");
+    const correoProvided = Object.prototype.hasOwnProperty.call(payload, "Correo") || Object.prototype.hasOwnProperty.call(payload, "correo") || Object.prototype.hasOwnProperty.call(payload, "email");
+
+    const telefonoRaw = (payload["Teléfono"] ?? payload.Telefono ?? payload.telefono ?? payload.phone);
+    const correoRaw = (payload["Correo"] ?? payload.correo ?? payload.email);
+
+    const telefono = telefonoProvided ? String(telefonoRaw ?? "").trim() : existingTelefono;
+    const correo = correoProvided ? String(correoRaw ?? "").trim() : existingCorreo;
+
+    // requerir al menos uno no vacío después de la actualización
+    if (!telefono && !correo) {
+      return res.status(400).json({ ok: false, message: "Debe tener al menos Teléfono o Correo. No se permiten ambos vacíos." });
+    }
+
+    // construir objeto con Row ID y sólo las columnas que queremos actualizar (incluir claves aunque sean "")
+    const row = { "Row ID": rowId };
+    // incluir teléfono y correo explícitamente (si el front quiere mantener el existente, ya están en telefono/correo)
+    row["Teléfono"] = telefono;
+    row["Correo"] = correo;
+    // si el payload trae nombre explícitamente lo podemos respetar (opcional)
+    if (payload["Nombre y Apellido"] || payload.Nombre) {
+      const fullName = (payload["Nombre y Apellido"] ?? payload.Nombre ?? "").toString().trim();
+      if (fullName) row["Nombre y Apellido"] = fullName;
+    }
+
+    if (typeof appsheet.updateRow === "function") {
+      try {
+        const updatedRaw = await appsheet.updateRow(CLIENTES_TABLE, row);
+        const created = normalizeRows(updatedRaw) || [];
+        const client = (created && created[0]) ? created[0] : row;
+        return res.status(200).json({ ok: true, client, raw: updatedRaw });
+      } catch (e) {
+        console.error("[updateClient] appsheet.updateRow error:", e);
+        return res.status(500).json({ ok: false, message: "Error al actualizar cliente en AppSheet." });
+      }
+    }
+
+    return res.status(500).json({ ok: false, message: "updateRow no está implementado en el servicio AppSheet." });
+  } catch (err) {
+    console.error("[updateClient] error:", err);
+    return res.status(500).json({ ok: false, message: "Error interno al actualizar cliente." });
+  }
+}

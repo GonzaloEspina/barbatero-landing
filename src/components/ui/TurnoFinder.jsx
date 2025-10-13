@@ -4,6 +4,7 @@ import TimePicker from "./TimePicker";
 import ServiceSelect from "./ServiceSelect";
 import NewClientForm from "./NewClientForm";
 import ClientCard from "./ClientCard";
+import EditClientInline from "./EditClientInline";
 import { normalizeToHM, parseDateFromString } from "./utils";
 
 // helper: intercambiar los dos primeros componentes de una fecha (front only)
@@ -61,6 +62,7 @@ export default function TurnoFinder() {
   const [registerError, setRegisterError] = useState("");
   // mensaje amigable / invitación a registrarse (no se usa setError para esto)
   const [registerPrompt, setRegisterPrompt] = useState("");
+  const [editingClient, setEditingClient] = useState(false);
 
   // fechas: ahora usamos el string ISO recibido del backend (YYYY-MM-DD) sin formateo adicional
   const [fecha, setFecha] = useState(""); // ISO string (YYYY-MM-DD) para enviar
@@ -398,40 +400,60 @@ export default function TurnoFinder() {
       )}
 
       {cliente && (
-        <div className="border border-gray-300 rounded-lg p-6 shadow-md bg-gray-50 text-gray-800">
-          <h3 className="text-xl font-bold text-blue-700 mb-4">Cliente encontrado</h3>
-          <p><span className="font-semibold">Nombre:</span> <span className="font-bold">{cliente["Nombre y Apellido"]}</span></p>
-          <p><span className="font-semibold">Teléfono:</span> <span className="font-bold">{cliente["Teléfono"] || "-"}</span></p>
-          <p><span className="font-semibold">Correo:</span> <span className="font-bold">{cliente.Correo || contacto}</span></p>
-
-          <div className="mt-4">
-            <h4 className="font-semibold">Próximos turnos</h4>
-            {(!Array.isArray(upcoming) || upcoming.length === 0) ? (
-              <div className="mt-2">
-                <p>No hay turnos futuros.</p>
-                <button onClick={openModal} className="mt-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Sacar Turno</button>
+        <div className="max-w-md mx-auto mb-6">
+          <div className="bg-gray-900 text-white rounded-lg shadow-lg p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-bold">Tus datos</h3>
+                <p className="text-sm text-gray-300 mt-1">Revisá y editá si hace falta antes de sacar el turno.</p>
               </div>
-            ) : (
-              <div className="mt-2">
-                <ul className="space-y-2">
-                  {upcoming.map((t, i) => (
-                    <li key={i} className="p-2 bg-white rounded border">
-                      <div><span className="font-semibold">Fecha:</span> {formatDateForDisplay(t.Fecha)}</div>
-                      <div><span className="font-semibold">Hora:</span> {t.Hora}</div>
-                      <div><span className="font-semibold">Servicio:</span> {t.Servicio}</div>
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-3">
-                  {(!allowsMultiple) ? (
-                    <div className="flex items-center gap-3">
-                      <p className="text-sm text-gray-700">Si querés sacar más turnos este mes, por favor contactanos por Whatsapp</p>
-                      <a href="https://wa.me/541160220978?text=Hola%2C%20quiero%20sacar%20m%C3%A1s%20turnos" target="_blank" rel="noreferrer" className="px-3 py-1 bg-green-600 text-white rounded">Whatsapp</a>
-                    </div>
+              <div>
+                {!editingClient && (
+                  <button
+                    onClick={() => setEditingClient(true)}
+                    className="ml-3 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm shadow-sm"
+                  >
+                    Editar
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {!editingClient ? (
+              <div className="mt-4 space-y-2">
+                <div className="text-sm text-gray-300"><span className="font-semibold text-gray-100">Nombre:</span> {cliente["Nombre y Apellido"] ?? cliente.Nombre ?? ""}</div>
+                <div className="text-sm text-gray-300"><span className="font-semibold text-gray-100">Teléfono:</span> {cliente["Teléfono"] ?? cliente.Telefono ?? ""}</div>
+                <div className="text-sm text-gray-300"><span className="font-semibold text-gray-100">Correo:</span> {cliente["Correo"] ?? cliente.Correo ?? ""}</div>
+
+                <div className="mt-4">
+                  <h4 className="text-sm font-semibold text-gray-200 mb-2">Próximos turnos</h4>
+                  {upcoming.length === 0 ? (
+                    <div className="text-sm text-gray-400">No hay próximos turnos.</div>
                   ) : (
-                    <button onClick={openModal} className="px-3 py-1 text-sm bg-yellow-500 rounded">Sacar otro turno</button>
+                    <div className="space-y-2">
+                      {upcoming.map((t, i) => (
+                        <div key={i} className="bg-gray-800 p-3 rounded-md flex items-center justify-between">
+                          <div>
+                            <div className="text-sm text-gray-100">{t.Fecha}</div>
+                            <div className="text-xs text-gray-400">{t.Servicio}</div>
+                          </div>
+                          <div className="text-sm font-medium text-gray-50">{t.Hora}</div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
+              </div>
+            ) : (
+              <div className="mt-4">
+                <EditClientInline
+                  client={cliente}
+                  onSaved={(updated) => {
+                    setCliente(updated);
+                    setEditingClient(false);
+                  }}
+                  onCancel={() => setEditingClient(false)}
+                />
               </div>
             )}
           </div>
