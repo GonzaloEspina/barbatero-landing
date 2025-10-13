@@ -435,7 +435,7 @@ const sortUpcoming = (items) => {
 
   // render CalendarGrid: pasar selectedIso para hover/selected
   return (
-    <div className="max-w-lg mx-auto mt-10 font-sans">
+    <div id="turno" className="max-w-lg mx-auto mt-10 font-sans">
       <h2 className="text-center text-2xl font-bold mb-6">Busca tu turno</h2>
 
       <div className="flex gap-2 mb-4">

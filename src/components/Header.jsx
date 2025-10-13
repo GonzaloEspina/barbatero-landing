@@ -1,26 +1,38 @@
 import React from "react";
-import Logo from "../assets/logo.svg";
+import Logo from "../assets/logo-modificado-blanco.svg";
 
 export default function Header() {
+  const scrollTo = (id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      window.history.pushState(null, "", `#${id}`);
+    } else {
+      window.location.href = `#${id}`;
+    }
+  };
+
   return (
-    <header className="container mx-auto px-6 py-6 flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <img src={Logo} alt="Barbatero" className="w-12 h-12" />
-        <div>
-          <h1 className="text-xl font-bold">Barbatero</h1>
-          <p className="text-sm text-gray-400 -mt-1">Barbería & Estilo</p>
+    <header className="site-header">
+      <div className="container-narrow header-grid">
+        {/* left: logo + name */}
+        <div className="header-left">
+          <img src={Logo} alt="Barbatero" className="logo" />
+          <span className="site-name">Barbatero</span>
+        </div>
+
+        {/* center: nav */}
+        <nav className="nav-center" aria-label="Main navigation">
+          <a href="#about" onClick={(e)=>{e.preventDefault(); scrollTo("about");}} className="nav-link">Nosotros</a>
+          <a href="#services" onClick={(e)=>{e.preventDefault(); scrollTo("services");}} className="nav-link">Servicios</a>
+          <a href="#reviews" onClick={(e)=>{e.preventDefault(); scrollTo("reviews");}} className="nav-link">Reseñas</a>
+        </nav>
+
+        {/* right: CTA */}
+        <div className="header-right">
+          <button onClick={() => scrollTo("turno")} className="btn-cta" aria-label="Quiero mi turno">Quiero mi turno</button>
         </div>
       </div>
-
-      <nav className="flex items-center gap-4">
-        <a href="#about" className="text-gray-300 hover:text-white">Información</a>
-        <a href="#reviews" className="text-gray-300 hover:text-white">Reseñas</a>
-        <button
-          className="ml-4 px-6 py-3 rounded-2xl font-semibold text-black bg-white shadow-lg transform transition hover:scale-105"
-        >
-          Quiero mi turno
-        </button>
-      </nav>
     </header>
   );
 }

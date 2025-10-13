@@ -1,33 +1,333 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&family=Inter:wght@300;400;600&display=swap');
+@import "tw-animate-css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Global design tokens */
-:root {
-  --bg: #000000; /* black */
-  --text: #ffffff; /* white */
-  --muted: #9ca3af;
-  --app-text-color: #000000; /* Forzar color de texto negro para toda la app (override si hay estilos que lo cambien) */
+/* Theme tokens (light) */
+:root{
+  --background: #ffffff;
+  --foreground: #374151;
+  --card: #f8fafc;
+  --card-foreground: #1f2937;
+  --popover: #ffffff;
+  --popover-foreground: #374151;
+  --primary: #374151;
+  --primary-foreground: #ffffff;
+  --secondary: #f8fafc;
+  --secondary-foreground: #1f2937;
+  --muted: #f9fafb;
+  --muted-foreground: #4b5563;
+  --accent: #6366f1;
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #e5e7eb;
+  --input: #f8fafc;
+  --ring: #6366f1;
+  --radius: 0.5rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #374151;
+  --card-shadow: 0 6px 18px rgba(12,18,26,0.06);
 }
 
-/* Force body dark background */
-html, body, #root {
+/* Dark tokens */
+.dark {
+  --background: #0b1220;
+  --foreground: #e6eef8;
+  --card: #0f1724;
+  --card-foreground: #e6eef8;
+  --popover: #0b1220;
+  --popover-foreground: #e6eef8;
+  --primary: #e6eef8;
+  --primary-foreground: #0b1220;
+  --secondary: #111827;
+  --secondary-foreground: #e6eef8;
+  --muted: #0f1724;
+  --muted-foreground: #9ca3af;
+  --accent: #6366f1;
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: rgba(255,255,255,0.06);
+  --input: #0b1220;
+  --ring: #6366f1;
+  --card-shadow: 0 8px 30px rgba(2,6,23,0.6);
+}
+
+/* Convenience aliases */
+:root{
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-border: var(--border);
+  --color-muted: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+}
+
+/* Base layer using variables */
+@layer base {
+  html, body, #root {
+    background: var(--color-background);
+    color: var(--color-foreground);
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* cards */
+  .card, .about-card {
+    background: var(--color-card);
+    color: var(--color-card-foreground);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--card-shadow);
+    border-radius: calc(var(--radius) + 6px);
+  }
+
+  /* hero overlay box */
+  .hero-overlay-box {
+    background: rgba(6,8,12,0.6);
+    box-shadow: 0 12px 40px rgba(2,6,23,0.7);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+
+  /* inputs / buttons */
+  input, select, textarea {
+    background: var(--input);
+    color: var(--color-foreground);
+    border: 1px solid var(--color-border);
+  }
+
+  .btn-cta {
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 8px 16px;
+    border-radius: 999px;
+    font-weight: 700;
+    border: 1px solid var(--color-border);
+    transition: background .15s ease, color .15s ease, box-shadow .12s ease, transform .12s ease;
+    box-shadow: 0 6px 20px rgba(8,10,20,0.06);
+  }
+  .btn-cta:hover,
+  .btn-cta:focus {
+    background: #000000 !important;
+    color: #ffffff !important;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px rgba(2,6,23,0.12);
+  }
+
+  .text-muted { color: var(--color-muted); }
+}
+
+/* Hero full-bleed rules (if used) */
+.hero-full {
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  width: 100%;
+  min-height: 72vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.hero-overlay {
+  width: 100%;
   height: 100%;
-  background: var(--bg);
-  color: var(--app-text-color) !important;
-  background-color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6rem 1rem;
+  background: linear-gradient(180deg, rgba(0,0,0,0.55), rgba(0,0,0,0.55));
 }
 
-body {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+/* About section light background and cards */
+.about-section { background: var(--page-light, #f7fafc); color: #0b1220; padding-top: 4rem; padding-bottom: 4rem; }
+.about-card { display:flex; align-items:flex-start; gap:1rem; padding: 18px; border-radius: 10px; }
+
+/* layout helpers (fix header + limit About width) */
+.container-narrow {
+  max-width: 1100px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
 }
 
-/* aplicar color por defecto y asegurar contraste */
-input, textarea, select, option, button, label {
-  color: var(--app-text-color) !important;
+/* Ensure header stays on top and has correct spacing */
+.site-header {
+  position: relative;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 0;
 }
 
-/* clases utilitarias para usar donde haga falta */
-.text-app-black { color: var(--app-text-color) !important; }
+/* nav layout inside header */
+.site-header nav {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+/* logo sizing in header */
+.site-header .logo {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+/* CTA in header: white pill like the mockup */
+.site-header .btn-cta {
+  background: #ffffff;
+  color: #000000;
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-weight: 700;
+  box-shadow: 0 6px 20px rgba(8,10,20,0.6);
+}
+
+/* Make sure hero overlay doesn't visually cover the header */
+.hero-full { z-index: 0; }
+.hero-overlay-box { z-index: 10; }
+
+/* Header / layout fixes */
+.site-header { position: sticky; top: 0; z-index: 60; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+.site-header .container-narrow { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem; }
+
+/* logo sizing and spacing */
+.site-header .logo { width: 44px; height: 44px; object-fit: contain; }
+
+/* center nav styling */
+.site-header nav a { font-weight: 600; letter-spacing: 0.01em; color: var(--color-foreground); }
+.site-header nav a:hover { color: var(--color-accent); }
+
+/* CTA pill style consistent with example (dark pill on light header) */
+.btn-cta {
+  background: var(--color-foreground);
+  color: var(--color-accent-foreground);
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-weight: 700;
+  box-shadow: 0 6px 20px rgba(8,10,20,0.6);
+  border: 1px solid rgba(255,255,255,0.03);
+}
+
+/* Hero overlay width: hacer más estrecha la caja central (comporta mejor con header) */
+.hero-overlay-box {
+  max-width: 760px; /* antes más ancha, ahora más cercana al ejemplo */
+  padding: 2.25rem 2rem;
+}
+
+/* About section: asegurar max 80vw y centrado */
+.about-section .container-narrow {
+  width: min(80vw, 1100px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Si se ve desacomodado en pantallas pequeñas */
+@media (max-width: 1024px) {
+  .site-header .container-narrow { grid-template-columns: auto 1fr auto; }
+  .hero-overlay-box { max-width: 92%; padding: 1.5rem; }
+  .about-section .container-narrow { width: 92vw; }
+}
+
+@media (max-width: 768px) {
+  .about-card { padding: 14px; }
+  .about-section { padding-top: 2.5rem; padding-bottom: 2.5rem; }
+}
+
+/* Header final tuning to match ejemplo layout */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  background: var(--color-card);       /* light header like ejemplo */
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-foreground);
+}
+
+/* Header layout to match ejemplo: left logo, centered nav, right CTA */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  background: var(--color-card);       /* light header */
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-foreground);      /* ensures logo-currentcolor fills correctly */
+}
+
+/* grid wrapper inside header */
+.header-grid {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+}
+
+/* left block (logo + name) */
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* logo uses currentColor from header so silhouette is dark on light header */
+.logo { width: 50px; height: 50px; display: block; }
+
+/* site name styling */
+.site-name {
+  font-weight: 700;
+  color: var(--color-foreground);
+  font-size: 1rem;
+}
+
+/* center nav: centered and spaced */
+.nav-center {
+  justify-self: center;
+  display: flex;
+  gap: 28px;
+  align-items: center;
+}
+
+/* nav links appearance */
+.nav-link {
+  color: var(--color-foreground);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  padding: 6px 0;
+  transition: color .12s ease;
+}
+.nav-link:hover { color: var(--color-accent); }
+
+/* right block (CTA) */
+.header-right { display: flex; justify-content: flex-end; align-items: center; }
+
+/* CTA pill style (dark pill on light header as in ejemplo) */
+.btn-cta {
+  background: var(--color-foreground);
+  color: var(--color-accent-foreground);
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-weight: 700;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 10px 30px rgba(2,6,23,0.08);
+}
+
+/* responsive: hide centered nav on small screens and keep logo + CTA */
+@media (max-width: 768px) {
+  .nav-center { display: none; }
+  .header-grid { grid-template-columns: auto 1fr auto; padding-left: 0.75rem; padding-right: 0.75rem; }
+}
