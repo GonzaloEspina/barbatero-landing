@@ -210,16 +210,17 @@ export default function TurnoFinder() {
   // helper local por seguridad (asegura HH:MM)
   const onlyHHMM = (h) => {
     if (h === null || h === undefined) return "";
-    // si existe normalizeToHM importada, probarla primero
+    // normalizar a string y limpiar NBSP
+    const s = String(h).replace(/\u00A0/g, " ").trim();
+    // si normalizeToHM entrega ya HH:MM válido, retornarlo
     try {
       const fromUtil = normalizeToHM(h);
-      if (fromUtil && /^\\d{1,2}:\\d{2}$/.test(fromUtil)) return fromUtil;
+      if (fromUtil && /^\d{1,2}:\d{2}$/.test(fromUtil)) return fromUtil.padStart(5, "0");
     } catch {}
-    const s = String(h).replace(/\\u00A0/g, " ").trim();
-    // buscar la primera aparición de HH:MM en cualquiera parte del string (maneja "12/30/1899 09:30:00")
-    const m = s.match(/(\\d{1,2}:\\d{2})/);
+    // buscar primer patrón HH:MM (acepta seguido opcionalmente :SS)
+    const m = s.match(/(\d{1,2}:\d{2})(?::\d{2})?/);
     if (m) return m[1].padStart(5, "0");
-    // fallback: devolver trimmed original
+    // fallback: devolver el string original (trimmed)
     return s;
   };
 
@@ -233,7 +234,8 @@ export default function TurnoFinder() {
 
     // establecer fecha seleccionada
     setFecha(iso);
-    setFechaDisplay(formatDateForDisplay(iso));
+    // mantener fechaDisplay con el ISO (NO formatear aquí para evitar efectos colaterales)
+    setFechaDisplay(iso);
 
     // normalizar horarios del payload (ya deberían venir HH:MM, pero por si acaso)
     const dayHorarios = Array.isArray(payload.horarios) ? payload.horarios.map(h => onlyHHMM(h)).filter(Boolean) : [];
@@ -450,16 +452,33 @@ export default function TurnoFinder() {
                       {upcoming.map((t, i) => (
                         <div key={i} className="bg-gray-800 p-3 rounded-md flex items-center justify-between">
                           <div>
-                            <div className="text-sm text-gray-100">{t.Fecha}</div>
+                            <div className="text-sm text-gray-100">{formatDateForDisplay(t.Fecha)}</div>
                             <div className="text-xs text-gray-400">{t.Servicio}</div>
                           </div>
-                          <div className="text-sm font-medium text-gray-50">{t.Hora}</div>
+                          <div className="text-sm font-medium text-gray-50">{onlyHHMM(t.Hora)}</div>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
-
+                                          {/* Mostrar acción para sacar turno (respeta la regla de allowsMultiple / within30Days) */}
+                        <div className="mt-3">
+                          {allowsMultiple ? (
+                            <button onClick={() => openModal()} className="px-4 py-2 bg-blue-600 text-white rounded-md">
+                              Sacar otro turno
+                            </button>
+                          ) : (
+                             within30Days ? (
+                               <div className="text-sm text-yellow-300">
+                                 Ya tenés un turno en los próximos 30 días. Si necesitás sacar otro, contactanos por Whatsapp.
+                               </div>
+                             ) : (
+                              <button onClick={() => openModal()} className="px-4 py-2 bg-blue-600 text-white rounded-md">
+                                 Sacar turno
+                               </button>
+                             )
+                           )}
+                         </div>
                 {/* Membresías activas / CTA */}
                 {(() => {
                   const clientRowId = cliente && (cliente["Row ID"] || cliente.RowID || cliente._RowNumber || cliente.id || cliente.Key || "");
@@ -470,7 +489,27 @@ export default function TurnoFinder() {
                   const hasActive = Array.isArray(membresias) && membresias.some(m => getEstado(m).includes("activa"));
                   const hasPending = Array.isArray(membresias) && membresias.some(m => getEstado(m).includes("pendiente"));
 
-                  // Si hay membresía(s) pendientes mostramos la sección "Membresías Activas" con estado pendiente
+                  // --- nueva lógica: permite sacar múltiples turnos según columna Cliente["¿Puede sacar múltiples turnos?"]
+                  const rawAllow = String(cliente?.["¿Puede sacar múltiples turnos?"] ?? cliente?.["Puede sacar múltiples turnos?"] ?? cliente?.PuedeSacarMultiplesTurnos ?? "").trim().toLowerCase();
+                  const allowsMultiple = rawAllow === "si" || rawAllow === "sí" || rawAllow === "yes" || rawAllow === "true";
+
+                  // calcular si hay un turno dentro de los próximos 30 días (solo para control visual)
+                  const parseSafeDate = (s) => {
+                    if (!s) return null;
+                    try { return parseDateFromString(s); } catch (e) { const d = new Date(s); return isNaN(d) ? null : d; }
+                  };
+                  const within30Days = (() => {
+                    if (!Array.isArray(upcoming) || upcoming.length === 0) return false;
+                    const now = new Date();
+                    return upcoming.some(u => {
+                      const d = parseSafeDate(u.Fecha ?? u.fecha ?? u.Date);
+                      if (!d) return false;
+                      const diff = (d - now) / (1000*60*60*24);
+                      return diff >= 0 && diff <= 30;
+                    });
+                  })();
+
+                  // Si hay membresía pendiente mostramos la sección "Membresías Activas" con estado pendiente
                   if (hasPending) {
                     const pending = (membresias || []).filter(m => getEstado(m).includes("pendiente"));
                     return (
@@ -550,6 +589,25 @@ export default function TurnoFinder() {
                         <MembershipCTA clientRowId={clientRowId} hasActive={hasActive} hasPending={hasPending} />
                         {/* Mensaje secundario */}
                         <div className="text-sm text-gray-400 mt-3">No tenés una membresía activa.</div>
+
+                        {/* botón para sacar turno: si permite múltiples, mostrar siempre; si no, mostrar solo si NO hay turno en próximos 30 días */}
+                        <div className="mt-3">
+                          {allowsMultiple ? (
+                            <button onClick={() => openModal()} className="px-4 py-2 bg-blue-600 text-white rounded-md">
+                              Sacar otro turno
+                            </button>
+                          ) : (
+                            within30Days ? (
+                              <div className="text-sm text-yellow-300">
+                                Ya tenés un turno en los próximos 30 días. Si necesitás sacar otro, contactanos por Whatsapp.
+                              </div>
+                            ) : (
+                              <button onClick={() => openModal()} className="px-4 py-2 bg-blue-600 text-white rounded-md">
+                                Sacar turno
+                              </button>
+                            )
+                          )}
+                        </div>
                       </div>
                     );
                   }
@@ -557,9 +615,10 @@ export default function TurnoFinder() {
                   // Si tiene al menos una activa, mostramos encabezado y lista como antes
                   return (
                     <div className="mt-4">
-                      <h4 className="text-sm font-semibold text-gray-200 mb-2">Membresía Activa</h4>
+                      <h4 className="text-sm font-semibold text-gray-200 mb-2">Membresía activa</h4>
                       {membresias.filter(m => getEstado(m).includes("activa")).map((m, idx) => (
                         <div key={idx} className="bg-gradient-to-r from-green-900 to-gray-800 p-3 rounded-md mb-2">
+                          <div className="text-sm text-gray-100 font-semibold">{m.Membresía}</div>
                           <div className="text-xs text-gray-300">Inicio: <span className="font-medium text-gray-200">{m["Fecha de Inicio"]}</span></div>
                           <div className="text-xs text-gray-300">Vencimiento: <span className="font-medium text-gray-200">{m.Vencimiento}</span></div>
                           <div className="text-xs text-gray-300 mt-1">Turnos restantes: <span className="font-medium text-green-200">{m["Turnos Restantes"]}</span></div>
