@@ -180,6 +180,8 @@ export async function findClient(req, res) {
 
     // obtener turnos del cliente (filtrado localmente por seguridad)
     let upcoming = [];
+    // declarar memberships en scope de la función para que esté disponible al final
+    let memberships = [];
     try {
       const filterTurnos = clientRowId ? `([Cliente ID] = "${String(clientRowId).replace(/"/g,'\\"')}")` : null;
       let turnosResp = filterTurnos ? await appsheet.findRows("Turnos", filterTurnos) : await appsheet.readRows("Turnos");
@@ -253,12 +255,67 @@ export async function findClient(req, res) {
       });
       console.log("[findClient] upcoming count after date filter (>=today):", upcoming.length);
 
+      try {
+        // Buscar membresías por Cliente = Row ID. Hacer fallback a readRows y filtrado local
+        memberships = [];
+        console.log("[findClient] clientRowId:", clientRowId);
+        if (clientRowId) {
+          const esc = v => String(v || "").replace(/"/g, '\\"');
+          const filter = `([Cliente] = "${esc(clientRowId)}")`;
+          console.log("[findClient] fetching memberships with filter:", filter);
+          let membRows = [];
+          try {
+            const membResp = await appsheet.findRows("Membresías Activas", filter);
+            console.log("[findClient] Membresías Activas findRows raw:", membResp);
+            membRows = normalizeRows(membResp) || [];
+          } catch (err) {
+            console.warn("[findClient] findRows Membresías Activas falló (no crítico):", err?.message ?? err);
+          }
+
+          // filtrar localmente por coincidencia exacta/contains en el campo Cliente
+          const matchId = String(clientRowId).trim();
+          let filtered = (membRows || []).filter(m => {
+            const cli = valueToString(m["Cliente"] ?? m.Cliente ?? "").trim();
+            return cli === matchId || cli.includes(matchId);
+          });
+
+          // si no encontramos nada con findRows, hacer readRows y filtrar localmente (más robusto)
+          if (!filtered || filtered.length === 0) {
+            try {
+              const all = await appsheet.readRows("Membresías Activas");
+              const allRows = normalizeRows(all) || [];
+              filtered = (allRows || []).filter(m => {
+                const cli = valueToString(m["Cliente"] ?? m.Cliente ?? "").trim();
+                return cli === matchId || cli.includes(matchId);
+              });
+              console.log("[findClient] Membresías Activas readRows filtered count:", filtered.length);
+            } catch (e) {
+              console.warn("[findClient] readRows Membresías Activas falló:", e?.message ?? e);
+              filtered = [];
+            }
+          }
+
+          memberships = (filtered || []).map(m => ({
+            "Row ID": valueToString(m["Row ID"] ?? m.RowID ?? m["RowID"] ?? ""),
+            Membresía: valueToString(m["Membresía"] ?? m.Membresia ?? m["Membresía "] ?? ""),
+            "Fecha de Inicio": valueToString(m["Fecha de Inicio"] ?? m.FechaInicio ?? ""),
+            Vencimiento: valueToString(m["Vencimiento"] ?? m.Vencimiento ?? ""),
+            "Turnos Restantes": valueToString(m["Turnos Restantes"] ?? m["Turnos Restantes "] ?? m.TurnosRestantes ?? ""),
+            Estado: valueToString(m["Estado"] ?? m.Estado ?? "")
+          }));
+        }
+      } catch (err2) {
+        console.warn("[findClient] error procesando membresías:", err2?.message ?? err2);
+        memberships = [];
+      }
+      console.log("[findClient] memberships count:", memberships.length);
+
     } catch (e) {
       console.error("[findClient] error obteniendo turnos:", e);
       upcoming = [];
     }
 
-    return res.status(200).json({ found: true, client, upcoming });
+    return res.status(200).json({ found: true, client, upcoming, memberships });
   } catch (e) {
     console.error("[findClient] error:", e);
     return res.status(500).json({ found: false, message: "Error interno al buscar cliente." });
@@ -380,3 +437,153 @@ export async function updateClient(req, res) {
     return res.status(500).json({ ok: false, message: "Error interno al actualizar cliente." });
   }
 }
+
+// --- START: nuevas funciones para listar y reservar membresías ---
+// formatea fecha dd/mm/yyyy
+function fmtDDMMYYYY(d) {
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+function addMonths(d, months) {
+  const dt = new Date(d);
+  dt.setMonth(dt.getMonth() + Number(months || 0));
+  return dt;
+}
+
+// Listar membresías (para que el front muestre Membresía | Cantidad de Turnos | Meses Activa | Valor)
+export async function listMemberships(req, res) {
+  try {
+    const tryNames = ["Membresías", "Membresias", "Membresia", "Membresia ", "Membresias Activas", "Membresias"]; // variantes a probar
+    let rows = [];
+    let usedName = null;
+    for (const name of tryNames) {
+      try {
+        console.log(`[listMemberships] intentando readRows tabla: "${name}"`);
+        const resp = await appsheet.readRows(name);
+        // mostrar tipo/preview para diagnosticar
+        console.log(`[listMemberships] raw readRows response type: ${typeof resp}`);
+        try { console.log(`[listMemberships] raw preview:`, Array.isArray(resp) ? resp.slice(0,3) : resp && resp.rows ? resp.rows.slice(0,3) : resp); } catch(e){/*ignore*/}
+
+        const got = normalizeRows(resp) || [];
+        console.log(`[listMemberships] readRows "${name}" returned count:`, got.length);
+        if (got && got.length > 0) {
+          rows = got;
+          usedName = name;
+          break;
+        }
+      } catch (err) {
+        console.warn(`[listMemberships] readRows "${name}" falló:`, err?.message ?? err);
+      }
+
+      // intentar findRows(TRUE) como fallback
+      try {
+        console.log(`[listMemberships] intentando findRows tabla: "${name}" con filtro TRUE`);
+        const resp2 = await appsheet.findRows(name, "TRUE");
+        console.log(`[listMemberships] raw findRows response type: ${typeof resp2}`);
+        const got2 = normalizeRows(resp2) || [];
+        console.log(`[listMemberships] findRows "${name}" returned count:`, got2.length);
+        if (got2 && got2.length > 0) {
+          rows = got2;
+          usedName = name;
+          break;
+        }
+      } catch (err2) {
+        console.warn(`[listMemberships] findRows "${name}" falló:`, err2?.message ?? err2);
+      }
+    }
+
+    if ((!rows || rows.length === 0)) {
+      console.warn("[listMemberships] No se obtuvieron filas de AppSheet con ninguna variante de nombre. Verificar: table name exacto, permisos API key y security filters.");
+      return res.json({ ok: true, memberships: [] });
+    }
+
+    console.log("[listMemberships] usando tabla:", usedName, "filas:", rows.length);
+    console.log("[listMemberships] sample rows keys:", Object.keys((rows[0]||{})).slice(0,20));
+
+    const out = (rows || []).map(r => ({
+      key: valueToString(r["Membresía"] ?? r.Membresia ?? r["Membresía "] ?? r["Row ID"] ?? r["RowID"] ?? ""),
+      membresia: valueToString(r["Membresía"] ?? r.Membresia ?? r.Membresia ?? r["Membresía "] ?? ""),
+      cantidadTurnos: valueToString(r["Cantidad de Turnos"] ?? r["Cantidad de Turnos "] ?? r.Cantidad ?? r.cantidad ?? ""),
+      mesesActiva: valueToString(r["Meses Activa"] ?? r["Meses Activa "] ?? r.Meses ?? r.meses ?? ""),
+      valor: valueToString(r["Valor"] ?? r.Valor ?? r.valor ?? "")
+    }));
+
+    return res.json({ ok: true, memberships: out });
+  } catch (e) {
+    console.error("[listMemberships] error inesperado:", e?.message ?? e);
+    return res.status(500).json({ ok: false, memberships: [], message: "error interno" });
+  }
+}
+
+// Reservar/crear una membresía activa.
+// body: { clientRowId, membershipKey }
+// importante: "Cliente" en la fila nueva quedará EXACTAMENTE igual a clientRowId
+export async function reserveMembership(req, res) {
+  try {
+    const body = req.body || {};
+    const clientRowId = String(body.clientRowId || body.clientId || "").trim();
+    const membershipKey = String(body.membershipKey || "").trim();
+    if (!clientRowId || !membershipKey) return res.status(400).json({ ok: false, message: "clientRowId y membershipKey requeridos." });
+
+    // obtener datos de la membresía seleccionada
+    let memb = null;
+    try {
+      const f = await appsheet.findRows("Membresías", `([Membresía] = "${String(membershipKey).replace(/"/g,'\\"')}")`);
+      const fr = normalizeRows(f) || [];
+      if (fr.length) memb = fr[0];
+    } catch (e) { /* ignore */ }
+
+    if (!memb) {
+      const all = normalizeRows(await appsheet.readRows("Membresías")) || [];
+      memb = all.find(r => valueToString(r["Membresía"] ?? r.Membresia ?? "") === membershipKey);
+    }
+    if (!memb) return res.status(404).json({ ok: false, message: "Membresía no encontrada." });
+
+    // helper: ISO date YYYY-MM-DD
+    function toISODate(d) {
+      const dt = new Date(d);
+      return dt.toISOString().slice(0, 10);
+    }
+
+    const today = new Date();
+    const meses = Number(valueToString(memb["Meses Activa"] ?? memb["Meses Activa "] ?? memb.Meses ?? 2)) || 2;
+    const inicioStr = toISODate(today);
+    const vencimientoStr = toISODate(addMonths(today, meses));
+
+    const cantidadTurnos = valueToString(memb["Cantidad de Turnos"] ?? memb.Cantidad ?? memb["Cantidad de Turnos "] ?? "");
+    const valor = valueToString(memb["Valor"] ?? memb.Valor ?? memb.valor ?? "");
+
+    const newRow = {
+      "Membresía": membershipKey,
+      "Cliente": clientRowId,
+      "Valor": valor,
+      "Pago Confirmado": "No",
+      "Fecha de Inicio": inicioStr,
+      "Vencimiento": vencimientoStr,
+      "Turnos Restantes": cantidadTurnos
+    };
+
+    // crear fila
+    if (typeof appsheet.addRow === "function") {
+      await appsheet.addRow("Membresías Activas", newRow);
+    } else if (typeof appsheet.createRow === "function") {
+      await appsheet.createRow("Membresías Activas", newRow);
+    } else if (typeof appsheet.postRow === "function") {
+      await appsheet.postRow("Membresías Activas", newRow);
+    } else {
+      return res.status(500).json({ ok: false, message: "No hay helper para crear filas en AppSheet." });
+    }
+
+    return res.status(201).json({
+      ok: true,
+      message: "Membresía reservada. Pendiente de activación.",
+      activeMembership: newRow
+    });
+  } catch (err) {
+    console.error("[reserveMembership] error:", err?.message ?? err);
+    return res.status(500).json({ ok: false, message: "Error reservando membresía." });
+  }
+}
+// --- END: nuevas funciones ---

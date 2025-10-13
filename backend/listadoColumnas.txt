@@ -12,3 +12,9 @@ Servicio
 
 tabla Cancelar Agenda:
 Row ID | Cancelar | Desde | Hasta | Día
+
+tabla Membresías Activas:
+Membresía | Cliente | Valor | Pago Confirmado | Fecha de Inicio  | Vencimiento
+
+Tabla Membresías:
+Membresía | Cantidad de Turnos | Meses Activa | Valor

@@ -6,6 +6,8 @@ import NewClientForm from "./NewClientForm";
 import ClientCard from "./ClientCard";
 import EditClientInline from "./EditClientInline";
 import { normalizeToHM, parseDateFromString } from "./utils";
+import MembershipCTA from "../MembershipCTA.jsx";
+
 
 // helper: intercambiar los dos primeros componentes de una fecha (front only)
 // mejora: si recibe ISO YYYY-MM-DD devuelve DD/MM/YYYY
@@ -46,10 +48,11 @@ const formatDateForDisplay = (s) => {
 export default function TurnoFinder() {
   const [contacto, setContacto] = useState("");
   const [cliente, setCliente] = useState(null);
+  const [upcoming, setUpcoming] = useState([]);
+  const [membresias, setMembresias] = useState([]);
   const [clientNotFound, setClientNotFound] = useState(false);
   const [nuevoNombre, setNuevoNombre] = useState("");
   const [nuevoTelefono, setNuevoTelefono] = useState("");
-  const [upcoming, setUpcoming] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -77,6 +80,18 @@ export default function TurnoFinder() {
   const [creating, setCreating] = useState(false);
   const [disponibilidadMsg, setDisponibilidadMsg] = useState("");
 
+  // feedback para copiar alias
+  const [copiedAlias, setCopiedAlias] = useState(false);
+  const handleCopyAlias = async (alias = "barbatero.mp") => {
+    try {
+      await navigator.clipboard.writeText(alias);
+      setCopiedAlias(true);
+      setTimeout(() => setCopiedAlias(false), 2000);
+    } catch (e) {
+      // silencioso
+    }
+  };
+  
   // calendar state
   const [calendarDays, setCalendarDays] = useState([]); // [{ iso: "YYYY-MM-DD", dateObj, available, blocked, horarios }]
   const [loadingCalendar, setLoadingCalendar] = useState(false);
@@ -118,6 +133,7 @@ export default function TurnoFinder() {
       if (res.ok && data.found) {
         setCliente(data.client);
         setUpcoming(Array.isArray(data.upcoming) ? data.upcoming.map(t => ({ ...t, Hora: onlyHHMM(t.Hora) })) : []);
+        setMembresias(Array.isArray(data.memberships) ? data.memberships : []);
         setClientNotFound(false);
       } else {
         // no mostrar el mensaje en "error" rojo; en su lugar mostrar prompt amigable + formulario
@@ -443,6 +459,115 @@ export default function TurnoFinder() {
                     </div>
                   )}
                 </div>
+
+                {/* Membresías activas / CTA */}
+                {(() => {
+                  const clientRowId = cliente && (cliente["Row ID"] || cliente.RowID || cliente._RowNumber || cliente.id || cliente.Key || "");
+
+                  // Normalizar estados (usar la columna "Estado" que definiste en AppSheet)
+                  const getEstado = (m) => String(m?.Estado ?? m?.["Estado"] ?? m?.estado ?? "").trim().toLowerCase();
+
+                  const hasActive = Array.isArray(membresias) && membresias.some(m => getEstado(m).includes("activa"));
+                  const hasPending = Array.isArray(membresias) && membresias.some(m => getEstado(m).includes("pendiente"));
+
+                  // Si hay membresía(s) pendientes mostramos la sección "Membresías Activas" con estado pendiente
+                  if (hasPending) {
+                    const pending = (membresias || []).filter(m => getEstado(m).includes("pendiente"));
+                    return (
+                      <div className="mt-4">
+                        <h4 className="text-sm font-semibold text-gray-200 mb-2">Membresía Activa</h4>
+                        {pending.map((m, idx) => {
+                          const alias = "barbatero.mp";
+                          return (
+                            <div key={idx} className="p-3 rounded-md mb-2 bg-gradient-to-r from-yellow-900 to-gray-800">
+                              <div className="flex items-center justify-between">
+                                <div className="text-sm text-gray-100 font-semibold">
+                                  {m.Membresía ?? m.membresia ?? ""}
+                                  <span className="text-xs text-yellow-100 ml-2"> - Pendiente de Confirmación</span>
+                                </div>
+                              </div>
+
+                              {/* texto de activación arriba del alias */}
+                              <div className="mt-3 text-sm text-gray-200">
+                                Para activar la membresía, realizá el pago y envianos el comprobante por Whatsapp.
+                              </div>
+
+                              {/* alias + acciones repartidos en todo el ancho */}
+                              <div className="mt-3 border-t pt-3 w-full flex items-center">
+                                {/* left: alias + copiar (ocupa todo el espacio disponible) */}
+                                <div className="flex items-center gap-3 flex-1">
+                                  <div className="text-sm text-gray-200">Alias:</div>
+
+                                  {/* alias sin fondo - texto plano */}
+                                  <span className="text-gray-100 font-mono font-medium">{alias}</span>
+
+                                  {/* botón copiar: sin fondo, líneas blancas */}
+                                  <button
+                                    onClick={() => handleCopyAlias(alias)}
+                                    title="Copiar alias"
+                                    className="inline-flex items-center justify-center w-9 h-9 rounded text-white hover:text-gray-200 focus:outline-none"
+                                    aria-label="Copiar alias"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                      <rect x="9" y="9" width="11" height="11" rx="2" ry="2"></rect>
+                                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9"></path>
+                                    </svg>
+                                  </button>
+
+                                  {copiedAlias && <div className="ml-2 px-3 py-1 bg-green-100 text-green-800 text-xs rounded">Alias copiado</div>}
+                                </div>
+
+                                {/* right: botón WhatsApp (pequeño, menos área verde) */}
+                                <div className="ml-3 flex-shrink-0">
+                                  <a
+                                    href={`https://wa.me/54911XXXXXXXX?text=${encodeURIComponent("Adjunto comprobante de pago para la membresía")}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center justify-center w-10 h-10 rounded-full border-2 border-green-600 bg-transparent hover:bg-green-600 transition-colors"
+                                    title="Enviar comprobante por WhatsApp"
+                                    aria-label="Enviar comprobante por WhatsApp"
+                                  >
+                                    {/* WhatsApp PNG icon (clean) */}
+                                    <img
+                                      src="https://cdn-icons-png.freepik.com/256/174/174879.png?semt=ais_white_label"
+                                      alt="WhatsApp"
+                                      className="w-5 h-5"
+                                    />
+                                  </a>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  }
+
+                  // Si NO tiene membresía activa ni pendiente mostramos solo el CTA (sin encabezado)
+                  if (!hasActive && !hasPending) {
+                    return (
+                      <div className="mt-4 mb-4">
+                        <MembershipCTA clientRowId={clientRowId} hasActive={hasActive} hasPending={hasPending} />
+                        {/* Mensaje secundario */}
+                        <div className="text-sm text-gray-400 mt-3">No tenés una membresía activa.</div>
+                      </div>
+                    );
+                  }
+
+                  // Si tiene al menos una activa, mostramos encabezado y lista como antes
+                  return (
+                    <div className="mt-4">
+                      <h4 className="text-sm font-semibold text-gray-200 mb-2">Membresía Activa</h4>
+                      {membresias.filter(m => getEstado(m).includes("activa")).map((m, idx) => (
+                        <div key={idx} className="bg-gradient-to-r from-green-900 to-gray-800 p-3 rounded-md mb-2">
+                          <div className="text-xs text-gray-300">Inicio: <span className="font-medium text-gray-200">{m["Fecha de Inicio"]}</span></div>
+                          <div className="text-xs text-gray-300">Vencimiento: <span className="font-medium text-gray-200">{m.Vencimiento}</span></div>
+                          <div className="text-xs text-gray-300 mt-1">Turnos restantes: <span className="font-medium text-green-200">{m["Turnos Restantes"]}</span></div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             ) : (
               <div className="mt-4">

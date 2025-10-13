@@ -11,7 +11,7 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-app.use("/api/turnos", turnsRouter);
+app.use("/api/turnos", turnsRouter); // <-- fijate si aquí usás "/api/turnos" o solo "/"
 // registrar ruta para crear cliente (asegurá que no exista duplicada)
 app.post("/api/clients/create", createClient);
 app.put("/api/clients/update", updateClient);
