@@ -33,8 +33,38 @@ export default function handler(req, res) {
       "Teléfono": isEmail ? "" : input
     };
 
+    // Mock: Agregar turnos próximos del cliente
+    const upcoming = isEmail ? [
+      {
+        id: 'turno_1',
+        Fecha: '2025-10-20',
+        Hora: '10:30',
+        Servicio: 'Corte + Barba',
+        Estado: 'confirmado',
+        Precio: '$8000'
+      },
+      {
+        id: 'turno_2', 
+        Fecha: '2025-10-25',
+        Hora: '15:00',
+        Servicio: 'Corte',
+        Estado: 'pendiente',
+        Precio: '$5000'
+      }
+    ] : [
+      {
+        id: 'turno_3',
+        Fecha: '2025-10-18',
+        Hora: '09:00',
+        Servicio: 'Barba',
+        Estado: 'confirmado',
+        Precio: '$3000'
+      }
+    ];
+
     console.log('Returning client:', mockClient);
-    return res.json({ found: true, client: mockClient, upcoming: [], memberships: [] });
+    console.log('Returning upcoming appointments:', upcoming);
+    return res.json({ found: true, client: mockClient, upcoming, memberships: [] });
 
   } catch (e) {
     console.error('Find-client error:', e);
