@@ -26,41 +26,60 @@ export default function handler(req, res) {
     const input = String(contacto).trim();
     const isEmail = input.includes('@');
     
+    // Generar nombre basado en el email/teléfono específico
+    let nombre, apellido;
+    if (isEmail) {
+      const emailPart = input.split('@')[0];
+      if (emailPart.includes('.')) {
+        const parts = emailPart.split('.');
+        nombre = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+        apellido = parts[1].charAt(0).toUpperCase() + parts[1].slice(1);
+      } else {
+        nombre = emailPart.charAt(0).toUpperCase() + emailPart.slice(1);
+        apellido = 'Cliente';
+      }
+    } else {
+      // Para teléfonos, usar nombres genéricos basados en los últimos dígitos
+      const lastDigits = input.slice(-2);
+      const nombres = ['María', 'Juan', 'Ana', 'Carlos', 'Lucia', 'Pedro'];
+      const apellidos = ['González', 'Rodríguez', 'López', 'Martínez', 'García', 'Fernández'];
+      nombre = nombres[parseInt(lastDigits) % nombres.length];
+      apellido = apellidos[parseInt(lastDigits) % apellidos.length];
+    }
+    
     const mockClient = {
-      "Row ID": isEmail ? "mock123" : "mock456",
-      "Nombre y Apellido": isEmail ? "Cliente Email Test" : "Cliente Teléfono Test",
+      "Row ID": `cliente_${Date.now()}`,
+      "Nombre y Apellido": `${nombre} ${apellido}`,
       "Correo": isEmail ? input : "",
       "Teléfono": isEmail ? "" : input
     };
 
-    // Mock: Agregar turnos próximos del cliente
-    const upcoming = isEmail ? [
-      {
-        id: 'turno_1',
-        Fecha: '2025-10-20',
-        Hora: '10:30',
-        Servicio: 'Corte + Barba',
-        Estado: 'confirmado',
-        Precio: '$8000'
-      },
-      {
-        id: 'turno_2', 
-        Fecha: '2025-10-25',
-        Hora: '15:00',
-        Servicio: 'Corte',
-        Estado: 'pendiente',
-        Precio: '$5000'
-      }
-    ] : [
-      {
-        id: 'turno_3',
-        Fecha: '2025-10-18',
-        Hora: '09:00',
-        Servicio: 'Barba',
-        Estado: 'confirmado',
-        Precio: '$3000'
-      }
-    ];
+    // Mock: Agregar turnos próximos específicos para este contacto
+    const baseDate = new Date();
+    const upcoming = [];
+    
+    // Generar 1-3 turnos basados en el hash del contacto
+    const contactHash = input.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+    const numTurnos = (contactHash % 3) + 1;
+    
+    for (let i = 0; i < numTurnos; i++) {
+      const futureDate = new Date(baseDate.getTime() + (i + 3) * 24 * 60 * 60 * 1000);
+      const servicios = ['Corte', 'Barba', 'Corte + Barba', 'Combo Completo'];
+      const precios = ['$5000', '$3000', '$8000', '$12000'];
+      const estados = ['confirmado', 'pendiente'];
+      const horas = ['09:00', '10:30', '12:00', '15:00', '16:30', '18:00'];
+      
+      const servicioIndex = (contactHash + i) % servicios.length;
+      
+      upcoming.push({
+        id: `turno_${contactHash}_${i}`,
+        Fecha: futureDate.toISOString().split('T')[0],
+        Hora: horas[(contactHash + i) % horas.length],
+        Servicio: servicios[servicioIndex],
+        Estado: estados[i % estados.length],
+        Precio: precios[servicioIndex]
+      });
+    }
 
     console.log('Returning client:', mockClient);
     console.log('Returning upcoming appointments:', upcoming);
