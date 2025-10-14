@@ -97,55 +97,111 @@ export default async function handler(req, res) {
 
     // Buscar cliente en AppSheet
     let rows = [];
-    if (emailMode) {
-      const filter = `([Correo] = "${input.replace(/"/g, '\\"')}")`;
-      try {
-        console.log('Email search filter:', filter);
-        const clientResp = await findRows(CLIENTES_TABLE, filter);
-        rows = normalizeRows(clientResp) || [];
-        console.log('Email search results:', rows.length);
-      } catch (e) {
-        console.warn('findRows por email falló, intentar readRows', e?.message ?? e);
-        const all = await readRows(CLIENTES_TABLE);
-        rows = normalizeRows(all) || [];
-      }
-    } else {
-      // Búsqueda por teléfono
-      const digitsTarget = digitsOnly(input);
-      console.log('Phone search target:', { input, digitsTarget });
+    
+    console.log('Environment check:', {
+      hasBaseUrl: !!process.env.APPSHEET_BASE_URL,
+      hasAccessKey: !!process.env.APPSHEET_ACCESS_KEY,
+      baseUrl: process.env.APPSHEET_BASE_URL ? 'CONFIGURED' : 'MISSING'
+    });
+
+    try {
+      // Siempre leer todos los clientes para mayor confiabilidad
+      console.log('Reading all clients from AppSheet...');
+      const all = await readRows(CLIENTES_TABLE);
+      const allRows = normalizeRows(all) || [];
+      console.log('Total clients read from AppSheet:', allRows.length);
       
-      try {
-        const all = await readRows(CLIENTES_TABLE);
-        rows = normalizeRows(all) || [];
-        console.log('Total clients read:', rows.length);
-      } catch (e) {
-        console.error('Error reading clients:', e);
-        return res.status(500).json({ found: false, message: "Error al buscar cliente." });
+      if (allRows.length > 0) {
+        console.log('Sample client structure:', JSON.stringify(allRows[0], null, 2));
       }
+      
+      rows = allRows;
+    } catch (e) {
+      console.error('Error reading clients from AppSheet:', e);
+      return res.status(500).json({ 
+        found: false, 
+        message: "Error al conectar con la base de datos.",
+        error: e.message 
+      });
     }
 
-    // Filtrar resultados
+    // Filtrar resultados con logging detallado
+    console.log('Filtering clients for:', { input, emailMode });
+    
     if (emailMode) {
       const emailLower = input.toLowerCase();
+      console.log('Looking for email:', emailLower);
+      
+      // Mostrar sample de emails en la BD
+      const sampleEmails = rows.slice(0, 5).map(r => ({
+        correo: valueToString(r.Correo ?? r["Correo"] ?? r.email ?? r.Email ?? "").trim(),
+        allFields: Object.keys(r).filter(k => k.toLowerCase().includes('correo') || k.toLowerCase().includes('email'))
+      }));
+      console.log('Sample emails from database:', sampleEmails);
+      
       rows = (rows || []).filter(r => {
-        const c = valueToString(r.Correo ?? r["Correo"] ?? r.email ?? r.Email ?? "").trim().toLowerCase();
-        if (c === emailLower) return true;
-        return rowContainsEmail(r, emailLower);
+        const emailFields = [
+          r.Correo, r["Correo"], r.email, r.Email, r.Mail, r.mail,
+          r["E-mail"], r["Correo Electrónico"], r["Correo electronico"]
+        ];
+        
+        for (const field of emailFields) {
+          const emailValue = valueToString(field).trim().toLowerCase();
+          if (emailValue === emailLower) {
+            console.log('Email match found:', emailValue);
+            return true;
+          }
+        }
+        return false;
       });
     } else {
       const digitsTarget = digitsOnly(input);
+      console.log('Looking for phone digits:', digitsTarget);
+      
+      // Mostrar sample de teléfonos en la BD
+      const samplePhones = rows.slice(0, 5).map(r => ({
+        telefono: valueToString(r["Teléfono"] ?? r.Telefono ?? r.phone ?? r.Phone ?? "").trim(),
+        digits: digitsOnly(r["Teléfono"] ?? r.Telefono ?? r.phone ?? r.Phone ?? ""),
+        allFields: Object.keys(r).filter(k => k.toLowerCase().includes('tel') || k.toLowerCase().includes('phone'))
+      }));
+      console.log('Sample phones from database:', samplePhones);
+      
       rows = (rows || []).filter(r => {
-        const phoneRaw = r["Teléfono"] ?? r.Telefono ?? r.phone ?? r.Phone ?? "";
-        const phoneStr = valueToString(phoneRaw).trim();
-        const pd = digitsOnly(phoneRaw);
+        const phoneFields = [
+          r["Teléfono"], r.Telefono, r.phone, r.Phone, r.Tel, r.tel,
+          r["Número"], r.Numero, r["Celular"], r.celular
+        ];
         
-        if (phoneStr && phoneStr === input) return true;
-        if (pd && pd === digitsTarget) return true;
+        for (const field of phoneFields) {
+          const phoneStr = valueToString(field).trim();
+          const pd = digitsOnly(field);
+          
+          // Comparación exacta primero
+          if (phoneStr === input) {
+            console.log('Phone exact match found:', phoneStr);
+            return true;
+          }
+          
+          // Comparación por dígitos
+          if (pd && pd === digitsTarget) {
+            console.log('Phone digits match found:', pd);
+            return true;
+          }
+          
+          // Comparación flexible (contiene)
+          if (pd && digitsTarget && (pd.includes(digitsTarget) || digitsTarget.includes(pd))) {
+            console.log('Phone flexible match found:', { pd, digitsTarget });
+            return true;
+          }
+        }
         return false;
       });
     }
 
     console.log('Filtered clients found:', rows.length);
+    if (rows.length > 0) {
+      console.log('Found client sample:', JSON.stringify(rows[0], null, 2));
+    }
 
     // Si no encontramos cliente
     if (!rows || rows.length === 0) {
