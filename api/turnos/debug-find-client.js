@@ -16,6 +16,66 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
+  if (req.method === 'GET') {
+    // Para pruebas desde el navegador, mostrar un formulario simple
+    return res.status(200).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Debug AppSheet Connection</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 40px; }
+          .container { max-width: 600px; }
+          input, button { padding: 10px; margin: 10px 0; }
+          input { width: 300px; }
+          button { background: #0070f3; color: white; border: none; cursor: pointer; }
+          .result { margin-top: 20px; padding: 20px; background: #f5f5f5; white-space: pre-wrap; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>🔍 Debug AppSheet Connection</h1>
+          <p>Ingresa un email o teléfono para probar la conexión:</p>
+          
+          <input type="text" id="contacto" placeholder="exe.damiano@gmail.com" value="exe.damiano@gmail.com">
+          <br>
+          <button onclick="testSearch()">🔍 Buscar Cliente</button>
+          
+          <div id="result" class="result" style="display: none;"></div>
+        </div>
+        
+        <script>
+          async function testSearch() {
+            const contacto = document.getElementById('contacto').value;
+            const resultDiv = document.getElementById('result');
+            
+            if (!contacto) {
+              alert('Ingresa un contacto');
+              return;
+            }
+            
+            resultDiv.style.display = 'block';
+            resultDiv.textContent = 'Buscando...';
+            
+            try {
+              const response = await fetch('/api/turnos/debug-find-client', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contacto })
+              });
+              
+              const data = await response.json();
+              resultDiv.textContent = JSON.stringify(data, null, 2);
+            } catch (e) {
+              resultDiv.textContent = 'Error: ' + e.message;
+            }
+          }
+        </script>
+      </body>
+      </html>
+    `);
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
