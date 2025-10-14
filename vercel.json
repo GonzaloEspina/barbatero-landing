@@ -1,54 +1,8 @@
 {
-  "version": 2,
   "builds": [
     {
       "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/turnos/find-client",
-      "dest": "/api/turnos/find-client.js"
-    },
-    {
-      "src": "/api/turnos/create-client", 
-      "dest": "/api/turnos/create-client.js"
-    },
-    {
-      "src": "/api/turnos/servicios",
-      "dest": "/api/turnos/servicios.js"
-    },
-    {
-      "src": "/api/turnos/create",
-      "dest": "/api/turnos/create.js"
-    },
-    {
-      "src": "/api/turnos/disponibilidad",
-      "dest": "/api/turnos/disponibilidad.js"
-    },
-    {
-      "src": "/api/turnos/calendar",
-      "dest": "/api/turnos/calendar.js"
-    },
-    {
-      "src": "/api/turnos/memberships",
-      "dest": "/api/turnos/memberships.js"
-    },
-    {
-      "src": "/api/turnos/memberships/reserve",
-      "dest": "/api/turnos/memberships/reserve.js"
-    },
-    {
-      "src": "/api/clients/update",
-      "dest": "/api/clients/update.js"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "use": "@vercel/static-build"
     }
   ]
 }

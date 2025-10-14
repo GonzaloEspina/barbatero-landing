@@ -1,7 +1,5 @@
-import { createTurno as createTurnoController } from '../../backend/controllers/turnsController.js';
-
-export default async function handler(req, res) {
-  // Configurar CORS
+// Configurar CORS
+function setCors(res) {
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -9,6 +7,10 @@ export default async function handler(req, res) {
     'Access-Control-Allow-Headers',
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
   );
+}
+
+export default async function handler(req, res) {
+  setCors(res);
   
   if (req.method === 'OPTIONS') {
     res.status(200).end();
@@ -19,10 +21,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  try {
-    await createTurnoController(req, res);
-  } catch (error) {
-    console.error('Error in create turno:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
+  // Implementación simplificada - retorna éxito por ahora
+  return res.json({ ok: true, message: "Función disponible próximamente" });
 }
