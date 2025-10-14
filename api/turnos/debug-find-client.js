@@ -115,9 +115,37 @@ export default async function handler(req, res) {
     const APP_KEY = process.env.APPSHEET_ACCESS_KEY;
     
     console.log('🔗 Connection details:', {
-      baseUrl: BASE ? `${BASE.substring(0, 30)}...` : 'MISSING',
-      hasKey: !!APP_KEY
+      baseUrl: BASE ? `${BASE.substring(0, 50)}...` : 'MISSING',
+      baseUrlFull: BASE, // Mostrar completa para debug
+      hasKey: !!APP_KEY,
+      keyLength: APP_KEY?.length || 0,
+      keyPrefix: APP_KEY ? APP_KEY.substring(0, 8) + '...' : 'MISSING'
     });
+
+    // Verificar formato de URL
+    if (!BASE || !BASE.includes('api.appsheet.com')) {
+      console.error('❌ Invalid AppSheet base URL format');
+      return res.status(500).json({ 
+        found: false, 
+        message: "URL de AppSheet mal configurada",
+        debug: { 
+          baseUrl: BASE,
+          expectedFormat: 'https://api.appsheet.com/api/v2/apps/YOUR_APP_ID'
+        }
+      });
+    }
+
+    if (!APP_KEY || APP_KEY.length < 10) {
+      console.error('❌ Invalid AppSheet access key');
+      return res.status(500).json({ 
+        found: false, 
+        message: "Clave de acceso de AppSheet mal configurada",
+        debug: { 
+          hasKey: !!APP_KEY,
+          keyLength: APP_KEY?.length || 0
+        }
+      });
+    }
 
     // Intentar una consulta simple para probar la conexión
     const testUrl = `${BASE}/tables/Clientes/Action`;
@@ -128,23 +156,87 @@ export default async function handler(req, res) {
     };
     
     console.log('📡 Making test request to:', testUrl);
+    console.log('📡 Request headers:', {
+      "Content-Type": "application/json",
+      "ApplicationAccessKey": APP_KEY ? `${APP_KEY.substring(0, 10)}...` : 'MISSING'
+    });
+    console.log('📡 Request body:', JSON.stringify(testBody, null, 2));
     
     const fetchFn = typeof fetch !== 'undefined' ? fetch : (await import('node-fetch')).default;
     
-    const testResponse = await fetchFn(testUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "ApplicationAccessKey": APP_KEY
-      },
-      body: JSON.stringify(testBody)
-    });
+    let testResponse;
+    try {
+      testResponse = await fetchFn(testUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "ApplicationAccessKey": APP_KEY
+        },
+        body: JSON.stringify(testBody)
+      });
+    } catch (fetchError) {
+      console.error('❌ Fetch error:', fetchError.message);
+      return res.status(500).json({ 
+        found: false, 
+        message: "Error de red al conectar con AppSheet",
+        debug: { 
+          fetchError: fetchError.message,
+          testUrl,
+          hasKey: !!APP_KEY
+        }
+      });
+    }
 
     console.log('📥 Test response status:', testResponse.status);
-    console.log('📥 Test response headers:', Object.fromEntries(testResponse.headers.entries()));
+    console.log('📥 Test response statusText:', testResponse.statusText);
+    console.log('📥 Test response ok:', testResponse.ok);
+    
+    let rawText;
+    try {
+      rawText = await testResponse.text();
+      console.log('📄 Raw response length:', rawText.length);
+      console.log('📄 Raw response (first 500 chars):', rawText.substring(0, 500));
+      console.log('📄 Raw response (last 100 chars):', rawText.length > 100 ? rawText.substring(rawText.length - 100) : rawText);
+    } catch (textError) {
+      console.error('❌ Error reading response text:', textError.message);
+      return res.status(500).json({ 
+        found: false, 
+        message: "Error leyendo respuesta de AppSheet",
+        debug: { 
+          textError: textError.message,
+          responseStatus: testResponse.status
+        }
+      });
+    }
 
-    const rawText = await testResponse.text();
-    console.log('📄 Raw response (first 500 chars):', rawText.substring(0, 500));
+    if (!testResponse.ok) {
+      console.error('❌ AppSheet returned error status:', testResponse.status, testResponse.statusText);
+      return res.status(500).json({ 
+        found: false, 
+        message: `AppSheet error: ${testResponse.status} ${testResponse.statusText}`,
+        debug: { 
+          status: testResponse.status,
+          statusText: testResponse.statusText,
+          rawResponse: rawText.substring(0, 500),
+          url: testUrl,
+          hasValidKey: APP_KEY && APP_KEY.length > 10
+        }
+      });
+    }
+
+    if (!rawText || rawText.trim() === '') {
+      console.error('❌ AppSheet returned empty response');
+      return res.status(500).json({ 
+        found: false, 
+        message: "AppSheet devolvió respuesta vacía",
+        debug: { 
+          responseLength: rawText?.length || 0,
+          status: testResponse.status,
+          headers: Object.fromEntries(testResponse.headers.entries()),
+          url: testUrl
+        }
+      });
+    }
     
     let testJson;
     try {
