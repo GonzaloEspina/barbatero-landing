@@ -160,7 +160,7 @@ export default function TurnoFinder() {
     const loadServicios = async () => {
       try {
         console.log('Cargando servicios...');
-        const res = await fetch("/api/servicios");
+        const res = await fetch("/api/turnos/servicios");
         console.log('Response status:', res.status);
         if (!res.ok) { 
           console.error('Error loading servicios:', res.status, res.statusText);
@@ -185,7 +185,7 @@ export default function TurnoFinder() {
     setRegisterMode(false); setRegisterPrefill({}); setRegisterForm({ Nombre: "", Telefono: "", Correo: "" }); setRegisterError(""); setRegisterPrompt("");
     try {
       console.log('Buscando cliente:', contacto);
-      const res = await fetch("/api/find-client", {
+      const res = await fetch("/api/turnos/find-client", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contacto })
       });
       console.log('Find client response status:', res.status);
@@ -912,7 +912,7 @@ export function ClientSearchAndRegister({ onClientReady }) {
     if (!contacto) { setErrorMsg("Ingrese correo o teléfono"); return; }
     setLoading(true);
     try {
-      const resp = await fetch("/api/find-client", {
+      const resp = await fetch("/api/turnos/find-client", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ contacto })
