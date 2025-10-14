@@ -147,8 +147,80 @@ export default async function handler(req, res) {
       });
     }
 
-    // Intentar una consulta simple para probar la conexión
-    const testUrl = `${BASE}/tables/Clientes/Action`;
+    // Probar diferentes nombres de tabla que podrían existir
+    const possibleTableNames = [
+      'Clientes',
+      'Cliente', 
+      'clients',
+      'Clients',
+      'CLIENTES',
+      'Usuarios',
+      'Users'
+    ];
+    
+    let workingTable = null;
+    let tableResults = {};
+    
+    console.log('🔍 Testing possible table names...');
+    
+    for (const tableName of possibleTableNames) {
+      const testUrl = `${BASE}/tables/${encodeURIComponent(tableName)}/Action`;
+      const testBody = { 
+        Action: "Read", 
+        Properties: {}, 
+        Rows: [] 
+      };
+      
+      console.log(`📋 Testing table: "${tableName}"`);
+      
+      try {
+        const response = await fetchFn(testUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "ApplicationAccessKey": APP_KEY
+          },
+          body: JSON.stringify(testBody)
+        });
+        
+        const text = await response.text();
+        const hasData = text && text.trim().length > 0;
+        
+        tableResults[tableName] = {
+          status: response.status,
+          hasData,
+          contentLength: text.length,
+          sample: hasData ? text.substring(0, 100) : 'empty'
+        };
+        
+        console.log(`📋 Table "${tableName}": Status ${response.status}, Content: ${text.length} chars`);
+        
+        if (response.ok && hasData && !workingTable) {
+          workingTable = tableName;
+          console.log(`✅ Found working table: "${tableName}"`);
+        }
+      } catch (e) {
+        tableResults[tableName] = { error: e.message };
+        console.log(`❌ Table "${tableName}": Error - ${e.message}`);
+      }
+    }
+    
+    if (!workingTable) {
+      console.log('❌ No working table found');
+      return res.status(500).json({ 
+        found: false, 
+        message: "No se encontró una tabla de clientes válida en AppSheet",
+        debug: { 
+          testedTables: tableResults,
+          suggestion: "Verifica el nombre exacto de tu tabla en AppSheet"
+        }
+      });
+    }
+    
+    console.log(`🎯 Using table: "${workingTable}"`);
+    
+    // Ahora usar la tabla que funciona
+    const testUrl = `${BASE}/tables/${encodeURIComponent(workingTable)}/Action`;
     const testBody = { 
       Action: "Read", 
       Properties: {}, 
