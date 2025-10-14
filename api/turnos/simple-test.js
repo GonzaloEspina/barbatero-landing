@@ -66,27 +66,43 @@ export default async function handler(req, res) {
     const correctBaseUrl = BASE.replace('api.appsheet.com', 'www.appsheet.com');
     console.log('🔗 Corrected URL:', correctBaseUrl);
 
-    // Probar diferentes formatos según la documentación oficial
+    // Probar diferentes selectores para obtener datos
     const testQueries = [
       {
-        name: "Official Find Query",
+        name: "Find All (true)",
         url: `${correctBaseUrl}/tables/Clientes/Action`,
         body: { Action: "Find", Properties: { Selector: "true" }, Rows: [] }
       },
       {
-        name: "Simple Find",
+        name: "Find All (empty selector)",
         url: `${correctBaseUrl}/tables/Clientes/Action`,
-        body: { Action: "Find" }
+        body: { Action: "Find", Properties: {}, Rows: [] }
       },
       {
-        name: "Find with Locale",
+        name: "Find without Properties",
+        url: `${correctBaseUrl}/tables/Clientes/Action`,
+        body: { Action: "Find", Rows: [] }
+      },
+      {
+        name: "Find specific email",
         url: `${correctBaseUrl}/tables/Clientes/Action`,
         body: { 
           Action: "Find", 
           Properties: { 
-            Locale: "en-US",
-            Selector: "true"
-          },
+            Selector: "([Correo] = \"exe.damiano@gmail.com\")"
+          }, 
+          Rows: [] 
+        }
+      },
+      {
+        name: "Find with MaxRows",
+        url: `${correctBaseUrl}/tables/Clientes/Action`,
+        body: { 
+          Action: "Find", 
+          Properties: { 
+            Selector: "true",
+            MaxRows: 10
+          }, 
           Rows: [] 
         }
       }

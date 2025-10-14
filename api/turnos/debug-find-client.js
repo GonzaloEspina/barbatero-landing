@@ -122,15 +122,15 @@ export default async function handler(req, res) {
       keyPrefix: APP_KEY ? APP_KEY.substring(0, 8) + '...' : 'MISSING'
     });
 
-    // Verificar formato de URL
-    if (!BASE || !BASE.includes('api.appsheet.com')) {
+    // Verificar formato de URL (actualizado según documentación oficial)
+    if (!BASE || (!BASE.includes('www.appsheet.com') && !BASE.includes('api.appsheet.com'))) {
       console.error('❌ Invalid AppSheet base URL format');
       return res.status(500).json({ 
         found: false, 
         message: "URL de AppSheet mal configurada",
         debug: { 
           baseUrl: BASE,
-          expectedFormat: 'https://api.appsheet.com/api/v2/apps/YOUR_APP_ID'
+          expectedFormat: 'https://www.appsheet.com/api/v2/apps/YOUR_APP_ID (preferred) or https://api.appsheet.com/api/v2/apps/YOUR_APP_ID'
         }
       });
     }
