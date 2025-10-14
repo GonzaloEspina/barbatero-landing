@@ -5,6 +5,8 @@ function isEmail(str) {
 }
 
 export default function handler(req, res) {
+  console.log('Find-client API called:', { method: req.method, url: req.url, body: req.body });
+
   // Configurar CORS
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');

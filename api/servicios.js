@@ -9,9 +9,10 @@ export default function handler(req, res) {
   );
   
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
+
+  console.log('Servicios API called:', { method: req.method, url: req.url });
 
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -39,5 +40,6 @@ export default function handler(req, res) {
     }
   ];
 
+  console.log('Returning servicios:', mockServicios);
   return res.json({ ok: true, servicios: mockServicios });
 }

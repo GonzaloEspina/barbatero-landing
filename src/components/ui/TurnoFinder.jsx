@@ -159,11 +159,19 @@ export default function TurnoFinder() {
   useEffect(() => {
     const loadServicios = async () => {
       try {
+        console.log('Cargando servicios...');
         const res = await fetch("/api/servicios");
-        if (!res.ok) { setServicios([]); return; }
+        console.log('Response status:', res.status);
+        if (!res.ok) { 
+          console.error('Error loading servicios:', res.status, res.statusText);
+          setServicios([]); 
+          return; 
+        }
         const data = await res.json();
+        console.log('Servicios data:', data);
         setServicios(data.servicios || []);
       } catch (e) {
+        console.error('Exception loading servicios:', e);
         setServicios([]);
       }
     };
@@ -176,9 +184,11 @@ export default function TurnoFinder() {
     setCliente(null); setUpcoming([]); setError(""); setClientNotFound(false);
     setRegisterMode(false); setRegisterPrefill({}); setRegisterForm({ Nombre: "", Telefono: "", Correo: "" }); setRegisterError(""); setRegisterPrompt("");
     try {
+      console.log('Buscando cliente:', contacto);
       const res = await fetch("/api/find-client", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contacto })
       });
+      console.log('Find client response status:', res.status);
       const data = await res.json();
       if (res.ok && data.found) {
         setCliente(data.client);
