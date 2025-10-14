@@ -62,13 +62,94 @@ export default async function handler(req, res) {
       });
     }
 
-    // Hacer consulta simple a la tabla Clientes
-    const url = `${BASE}/tables/Clientes/Action`;
-    const body = {
-      Action: "Read",
-      Properties: {},
-      Rows: []
-    };
+    // Corregir URL según documentación oficial
+    const correctBaseUrl = BASE.replace('api.appsheet.com', 'www.appsheet.com');
+    console.log('🔗 Corrected URL:', correctBaseUrl);
+
+    // Probar diferentes formatos según la documentación oficial
+    const testQueries = [
+      {
+        name: "Official Find Query",
+        url: `${correctBaseUrl}/tables/Clientes/Action`,
+        body: { Action: "Find", Properties: { Selector: "true" }, Rows: [] }
+      },
+      {
+        name: "Simple Find",
+        url: `${correctBaseUrl}/tables/Clientes/Action`,
+        body: { Action: "Find" }
+      },
+      {
+        name: "Find with Locale",
+        url: `${correctBaseUrl}/tables/Clientes/Action`,
+        body: { 
+          Action: "Find", 
+          Properties: { 
+            Locale: "en-US",
+            Selector: "true"
+          },
+          Rows: [] 
+        }
+      }
+    ];
+
+    let results = {};
+    
+    for (const query of testQueries) {
+      console.log(`📡 Testing: ${query.name}`);
+      
+      try {
+        const response = await fetch(query.url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "ApplicationAccessKey": APP_KEY  // Según documentación oficial
+          },
+          body: JSON.stringify(query.body)
+        });
+
+        const rawText = await response.text();
+        
+        results[query.name] = {
+          status: response.status,
+          ok: response.ok,
+          contentLength: rawText.length,
+          hasContent: rawText.trim().length > 0,
+          sample: rawText.substring(0, 200)
+        };
+        
+        console.log(`📊 ${query.name}: Status ${response.status}, Content: ${rawText.length} chars`);
+        
+        // Si encontramos una que funciona, usar esa
+        if (response.ok && rawText.trim().length > 0) {
+          console.log(`✅ Found working query: ${query.name}`);
+          
+          try {
+            const jsonData = JSON.parse(rawText);
+            
+            return res.status(200).json({
+              success: true,
+              workingQuery: query.name,
+              totalClients: Array.isArray(jsonData) ? jsonData.length : 'N/A',
+              dataType: typeof jsonData,
+              isArray: Array.isArray(jsonData),
+              sampleClients: Array.isArray(jsonData) ? jsonData.slice(0, 3) : jsonData,
+              fullResponse: jsonData
+            });
+          } catch (e) {
+            results[query.name].parseError = e.message;
+          }
+        }
+      } catch (fetchError) {
+        results[query.name] = { error: fetchError.message };
+      }
+    }
+    
+    // Si llegamos aquí, ninguna consulta funcionó
+    return res.status(500).json({
+      error: "All query formats failed",
+      testedQueries: results,
+      suggestion: "Check AppSheet API permissions and configuration"
+    });
 
     console.log('📡 Making request to:', url);
     console.log('📡 Request body:', JSON.stringify(body, null, 2));
