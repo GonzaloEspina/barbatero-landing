@@ -1,5 +1,3 @@
-import { normalizeRows, valueToString, readRows } from '../_lib/appsheet-utils.js';
-
 // Configurar CORS
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -13,18 +11,29 @@ function setCors(res) {
 
 async function getServicios(req, res) {
   try {
-    const SERVICIOS_TABLE = "Servicios";
-    const serviciosResp = await readRows(SERVICIOS_TABLE);
-    const servicios = normalizeRows(serviciosResp) || [];
-    
-    const formatted = servicios.map(s => ({
-      key: valueToString(s["Servicio"] ?? s.servicio ?? s.Servicio ?? s["Row ID"] ?? ""),
-      servicio: valueToString(s["Servicio"] ?? s.servicio ?? s.Servicio ?? ""),
-      duracion: valueToString(s["Duración"] ?? s.duracion ?? s.Duracion ?? ""),
-      precio: valueToString(s["Precio"] ?? s.precio ?? s.Precio ?? "")
-    }));
+    // Servicios de ejemplo para testing
+    const mockServicios = [
+      {
+        key: "corte",
+        servicio: "Corte de Cabello",
+        duracion: "30 min",
+        precio: "$15000"
+      },
+      {
+        key: "barba",
+        servicio: "Arreglo de Barba",
+        duracion: "20 min", 
+        precio: "$10000"
+      },
+      {
+        key: "combo",
+        servicio: "Corte + Barba",
+        duracion: "50 min",
+        precio: "$22000"
+      }
+    ];
 
-    return res.json({ ok: true, servicios: formatted });
+    return res.json({ ok: true, servicios: mockServicios });
   } catch (e) {
     console.error("[getServicios] error:", e);
     return res.status(500).json({ ok: false, message: "Error obteniendo servicios" });

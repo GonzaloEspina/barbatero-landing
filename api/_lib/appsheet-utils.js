@@ -60,7 +60,10 @@ async function doAction(tableName, body) {
   };
   if (APP_KEY) headers.ApplicationAccessKey = APP_KEY;
 
-  const resp = await fetch(url, {
+  // Use dynamic import for fetch if not available globally (Node.js compatibility)
+  const fetchFn = typeof fetch !== 'undefined' ? fetch : (await import('node-fetch')).default;
+  
+  const resp = await fetchFn(url, {
     method: "POST",
     headers,
     body: JSON.stringify(body),
