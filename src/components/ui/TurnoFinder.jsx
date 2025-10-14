@@ -159,10 +159,10 @@ export default function TurnoFinder() {
   useEffect(() => {
     const loadServicios = async () => {
       try {
-        const res = await fetch("/api/turnos/servicios");
+        const res = await fetch("/api/servicios");
         if (!res.ok) { setServicios([]); return; }
         const data = await res.json();
-        setServicios(Array.isArray(data) ? data : []);
+        setServicios(data.servicios || []);
       } catch (e) {
         setServicios([]);
       }
@@ -176,7 +176,7 @@ export default function TurnoFinder() {
     setCliente(null); setUpcoming([]); setError(""); setClientNotFound(false);
     setRegisterMode(false); setRegisterPrefill({}); setRegisterForm({ Nombre: "", Telefono: "", Correo: "" }); setRegisterError(""); setRegisterPrompt("");
     try {
-      const res = await fetch("/api/turnos/find-client", {
+      const res = await fetch("/api/find-client", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contacto })
       });
       const data = await res.json();
@@ -902,7 +902,7 @@ export function ClientSearchAndRegister({ onClientReady }) {
     if (!contacto) { setErrorMsg("Ingrese correo o teléfono"); return; }
     setLoading(true);
     try {
-      const resp = await fetch("/api/turnos/find-client", {
+      const resp = await fetch("/api/find-client", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ contacto })
