@@ -93,7 +93,7 @@ export default function MembershipCTA({ clientRowId, hasActive, hasPending, onRe
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white border-2 border-black rounded-lg shadow-2xl p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-start justify-between mb-6">
-              <div>
+              <div className="flex-1">
                 <h3 className="text-xl font-bold text-black mb-3">Comprar Membresía</h3>
                 <p className="text-sm text-gray-700 font-medium">
                   Para activar la membresía, realizá el pago
@@ -101,14 +101,13 @@ export default function MembershipCTA({ clientRowId, hasActive, hasPending, onRe
                   el comprobante por Whatsapp.
                 </p>
               </div>
-              <div>
-                <button
-                  onClick={() => setOpen(false)}
-                  className="ml-3 px-4 py-2 border-2 border-black bg-white hover:bg-gray-100 rounded-md text-sm font-semibold transition-colors"
-                >
-                  Cerrar
-                </button>
-              </div>
+              <button
+                onClick={() => setOpen(false)}
+                className="ml-4 px-3 py-1.5 border-2 border-gray-300 bg-white hover:bg-gray-100 text-black rounded-md text-sm font-semibold transition-colors flex-shrink-0"
+                aria-label="Cerrar modal"
+              >
+                ✕
+              </button>
             </div>
 
             {loading ? (

@@ -270,16 +270,16 @@
 /* Responsive Design */
 @media (max-width: 1024px) {
   .header-grid {
-    padding: 1rem;
+    padding: 1rem 1.5rem;
   }
   
   .hero-overlay-box {
     padding: 2rem;
-    margin: 1rem;
+    margin: 1.5rem;
   }
   
   .container-narrow {
-    padding: 0 1rem;
+    padding: 0 1.5rem;
   }
 }
 
@@ -291,6 +291,7 @@
   .header-grid {
     grid-template-columns: auto 1fr auto;
     gap: 1rem;
+    padding: 1rem 1.5rem;
   }
   
   .site-name {
@@ -298,7 +299,17 @@
   }
   
   .hero-overlay-box {
-    padding: 1.5rem;
+    padding: 2rem 1.5rem;
+    margin: 1.5rem;
+  }
+  
+  .container-narrow {
+    padding: 0 1.5rem;
+  }
+  
+  /* Asegurar espaciado en modales y elementos flotantes */
+  .fixed.inset-0 {
+    padding: 1rem;
   }
   
   .hero-overlay-box h2 {

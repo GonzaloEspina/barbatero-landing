@@ -6,7 +6,7 @@ export default function MapSection() {
   
   return (
     <section id="ubicacion" className="map-section py-16 bg-gradient-to-br from-gray-900 to-black">
-      <div className="container mx-auto px-4">
+      <div className="container-narrow">
         <div className="text-center mb-8">
           <h2 className="text-4xl font-bold text-white mb-4">Ubicación</h2>
           <p className="text-lg text-gray-300 max-w-2xl mx-auto">

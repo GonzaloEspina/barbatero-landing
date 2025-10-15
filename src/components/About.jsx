@@ -5,7 +5,7 @@ import { Scissors } from "lucide-react";
 export default function About() {
   return (
     <section id="about" className="about-section py-16">
-      <div className="container-narrow mx-auto px-4">
+      <div className="container-narrow">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
           <div>
             <img src={Foto} alt="Cortando pelo" className="rounded-xl shadow-lg w-full object-cover max-h-96" />
