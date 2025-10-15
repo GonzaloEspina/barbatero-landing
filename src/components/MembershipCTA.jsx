@@ -10,7 +10,7 @@ function formatValor(v){
   return s.startsWith("$") ? s : `$${s}`;
 }
 
-export default function MembershipCTA({ clientRowId, hasActive, hasPending }) {
+export default function MembershipCTA({ clientRowId, hasActive, hasPending, onReloadClient }) {
   // si ya tiene membresía activa o pendiente no mostramos CTA
   if (hasActive || hasPending) return null;
 
@@ -48,7 +48,10 @@ export default function MembershipCTA({ clientRowId, hasActive, hasPending }) {
       const j = await res.json().catch(() => ({}));
       if (res.ok && j.ok) {
         setOpen(false);
-        window.location.reload();
+        // Recargar los datos del cliente en lugar de recargar toda la página
+        if (onReloadClient) {
+          await onReloadClient();
+        }
       } else {
         alert(j.message || "No se pudo reservar la membresía.");
       }

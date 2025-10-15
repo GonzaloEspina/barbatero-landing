@@ -732,7 +732,12 @@ const sortUpcoming = (items) => {
                         {/* Acciones (botón / mensaje) arriba */}
                         {actionArea}
 
-                        <MembershipCTA clientRowId={clientRowId} hasActive={hasActive} hasPending={hasPending} />
+                        <MembershipCTA 
+                          clientRowId={clientRowId} 
+                          hasActive={hasActive} 
+                          hasPending={hasPending} 
+                          onReloadClient={buscarCliente}
+                        />
 
                       </div>
                     );
