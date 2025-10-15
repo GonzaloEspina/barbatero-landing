@@ -29,7 +29,8 @@ export function parseFechaDMY(fechaRaw) {
   const s = String(fechaRaw).replace(/\u00A0/g, " ").trim();
   const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
   if (m) {
-    let dd = parseInt(m[1], 10), mm = parseInt(m[2], 10), yy = m[3];
+    // AppSheet usa formato MM/DD/YYYY - interpretar como mes/día/año
+    let mm = parseInt(m[1], 10), dd = parseInt(m[2], 10), yy = m[3];
     if (yy.length === 2) yy = '20' + yy;
     const yyyy = parseInt(yy, 10);
     const dt = new Date(Date.UTC(yyyy, mm - 1, dd, 0, 0, 0));

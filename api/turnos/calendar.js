@@ -86,10 +86,12 @@ function parseDateFromAnyString(input) {
 
   const parts = found.split(/[\/\-]/).map(x => Number(x));
   if (parts.length === 3) {
-    let [a, b, y] = parts;
+    let [mm, dd, y] = parts; // MM/DD/YYYY (formato AppSheet)
     if (y < 100) y += 2000;
-    // asumir D/M/Y (convención del sistema)
-    return new Date(Date.UTC(y, (b - 1), a));
+    // Validar fecha antes de crear
+    if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) {
+      return new Date(Date.UTC(y, (mm - 1), dd));
+    }
   }
   return null;
 }
@@ -160,21 +162,13 @@ function isoCandidatesFromString(s) {
     if (p && !isNaN(p.getTime())) out.add(toISODate(p));
   } catch (e) {}
 
-  // 3) buscar patrones D/M/Y o M/D/Y y generar variantes (disambiguar cuando sea posible)
+  // 3) buscar patrones M/D/Y y generar ISO asumiendo formato MM/DD/YYYY (AppSheet)
   for (const m of s.matchAll(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/g)) {
-    let a = Number(m[1]), b = Number(m[2]), y = Number(m[3]);
+    let mm = Number(m[1]), dd = Number(m[2]), y = Number(m[3]); // MM/DD/YYYY
     if (y < 100) y += 2000;
-    // si alguno >12, sabemos qué es día
-    if (a > 12 && b <= 12) {
-      out.add(new Date(Date.UTC(y, b - 1, a)).toISOString().slice(0,10));
-    } else if (b > 12 && a <= 12) {
-      out.add(new Date(Date.UTC(y, a - 1, b)).toISOString().slice(0,10));
-    } else {
-      // ambiguo: agregar D/M/Y y M/D/Y si distinto
-      const d1 = new Date(Date.UTC(y, b - 1, a)).toISOString().slice(0,10); // D/M/Y
-      out.add(d1);
-      const d2 = new Date(Date.UTC(y, a - 1, b)).toISOString().slice(0,10); // M/D/Y
-      out.add(d2);
+    // Validar que sea una fecha válida
+    if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) {
+      out.add(new Date(Date.UTC(y, mm - 1, dd)).toISOString().slice(0,10));
     }
   }
 
@@ -199,22 +193,16 @@ function preferredIsoFromString(s) {
     if (p && !isNaN(p.getTime())) return toISODate(p);
   } catch (e) {}
 
-  // 2) buscar patrón D/M/Y o M/D/Y y escoger DMY salvo que podamos disambiguar
+  // 2) buscar patrón M/D/Y y usar formato MM/DD/YYYY (AppSheet)
   const m = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
   if (!m) return null;
-  let a = Number(m[1]), b = Number(m[2]), y = Number(m[3]);
+  let mm = Number(m[1]), dd = Number(m[2]), y = Number(m[3]); // MM/DD/YYYY
   if (y < 100) y += 2000;
-  // si uno de los dos >12 podemos inferir cuál es día
-  if (a > 12 && b <= 12) {
-    // a es día -> D/M/Y
-    return new Date(Date.UTC(y, b - 1, a)).toISOString().slice(0,10);
-  } else if (b > 12 && a <= 12) {
-    // b es día -> M/D/Y (interpretar como MDY)
-    return new Date(Date.UTC(y, a - 1, b)).toISOString().slice(0,10);
-  } else {
-    // ambiguo -> elegir D/M/Y por convención (evita rangos excesivamente amplios)
-    return new Date(Date.UTC(y, b - 1, a)).toISOString().slice(0,10);
+  // Validar que sea una fecha válida
+  if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) {
+    return new Date(Date.UTC(y, mm - 1, dd)).toISOString().slice(0,10);
   }
+  return null;
 }
 
 // ===== FUNCIÓN PRINCIPAL: getCalendarAvailability (copiada exacta del controller) =====
@@ -233,20 +221,32 @@ async function getCalendarAvailability(req, res) {
     }
 
     // --- Leer Disponibilidad (mapa numero -> horarios HH:MM) ---
+    console.log("[DEBUG] Consultando tabla Disponibilidad...");
     let dispResp = await findRows(DISPONIBILIDAD_TABLE, `([Número] <> "")`);
+    console.log("[DEBUG] Respuesta findRows Disponibilidad:", JSON.stringify(dispResp, null, 2));
     let dispRows = normalizeRows(dispResp);
+    console.log("[DEBUG] dispRows después de normalizar:", dispRows);
+    
     if (!dispRows || dispRows.length === 0) {
+      console.log("[DEBUG] No se encontraron filas con findRows, intentando readRows...");
       const allDisp = await readRows(DISPONIBILIDAD_TABLE);
+      console.log("[DEBUG] Respuesta readRows Disponibilidad:", JSON.stringify(allDisp, null, 2));
       dispRows = normalizeRows(allDisp) || [];
+      console.log("[DEBUG] dispRows después de readRows:", dispRows);
     }
+    
     const disponibilidadMap = {};
     (dispRows || []).forEach(r => {
+      console.log("[DEBUG] Procesando fila de disponibilidad:", r);
       const keyRaw = String(r["Número"] ?? r.Numero ?? r.numero ?? r["Día"] ?? r.Dia ?? r.Dia ?? "").trim();
+      console.log("[DEBUG] keyRaw extraído:", keyRaw);
       const raw = r["Horarios"] ?? r.Horarios ?? r.horarios ?? "";
+      console.log("[DEBUG] Horarios extraídos:", raw);
       let arr = [];
       if (Array.isArray(raw)) arr = raw.map(x => extractTimeHHMM(x));
       else arr = String(raw || "").split(",").map(x => extractTimeHHMM(x)).filter(Boolean);
       const uniq = Array.from(new Set(arr.filter(Boolean)));
+      console.log("[DEBUG] Horarios procesados:", uniq);
 
       // generar múltiples claves posibles para esta fila
       const keys = new Set();
@@ -271,15 +271,21 @@ async function getCalendarAvailability(req, res) {
           }
         }
       }
+      console.log("[DEBUG] Claves generadas para", keyRaw, ":", Array.from(keys));
 
       // asignar same horarios a todas las claves detectadas
       if (keys.size === 0) {
         // fallback: guardar bajo clave vacía
         disponibilidadMap[""] = uniq;
+        console.log("[DEBUG] Guardado bajo clave vacía:", uniq);
       } else {
-        for (const k of keys) disponibilidadMap[String(k)] = uniq;
+        for (const k of keys) {
+          disponibilidadMap[String(k)] = uniq;
+          console.log("[DEBUG] Guardado bajo clave", k, ":", uniq);
+        }
       }
     });
+    console.log("[DEBUG] disponibilidadMap final:", disponibilidadMap);
     console.log("[getCalendarAvailability] disponibilidadMap sample keys:", Object.keys(disponibilidadMap).slice(0,10));
 
     // --- Leer Cancelar Agenda (fallback find -> read) ---
@@ -290,20 +296,13 @@ async function getCalendarAvailability(req, res) {
       cancelRows = normalizeRows(cr) || [];
     }
 
-    // build multiple representations per date to match AppSheet formats (DD/MM/YY, MM/DD/YY, DD/MM/YYYY, MM/DD/YYYY, ISO)
-    const formatDDMMYY = d => `${String(d.getUTCDate()).padStart(2,'0')}/${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCFullYear()).slice(-2)}`;
-    const formatMMDDYY = d => `${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')}/${String(d.getUTCFullYear()).slice(-2)}`;
-    const formatDDMMYYYY = d => `${String(d.getUTCDate()).padStart(2,'0')}/${String(d.getUTCMonth()+1).padStart(2,'0')}/${d.getUTCFullYear()}`;
+    // AppSheet espera formato MM/DD/YYYY - usar solo este formato para evitar confusión
     const formatMMDDYYYY = d => `${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')}/${d.getUTCFullYear()}`;
-    const formatISO = d => `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
 
     const allDateStrings = [];
     dates.forEach(d => {
-      allDateStrings.push(formatDDMMYY(d));
-      allDateStrings.push(formatMMDDYY(d));
-      allDateStrings.push(formatDDMMYYYY(d));
+      // Solo usar formato MM/DD/YYYY que AppSheet entiende correctamente
       allDateStrings.push(formatMMDDYYYY(d));
-      allDateStrings.push(formatISO(d));
     });
     const uniqueDateStrings = Array.from(new Set(allDateStrings));
     const quoted = uniqueDateStrings.map(v => `"${v.replace(/"/g,'')}"`);
@@ -334,15 +333,13 @@ async function getCalendarAvailability(req, res) {
       let iso = null;
       if (fechaParsed) iso = toISODate(fechaParsed);
       else {
-        // fallback: intentar interpretar dd/mm/yyyy / mm/dd/yyyy
+        // fallback: interpretar como MM/DD/YYYY (formato AppSheet)
         const s = String(r.Fecha ?? "");
         const m = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
         if (m) {
-          let a = Number(m[1]), b = Number(m[2]), y = Number(m[3]);
-          if (y < 100) y += 2000;
-          if (a > 12 && b <= 12) iso = new Date(Date.UTC(y, b - 1, a)).toISOString().slice(0,10);
-          else if (b > 12 && a <= 12) iso = new Date(Date.UTC(y, a - 1, b)).toISOString().slice(0,10);
-          else iso = new Date(Date.UTC(y, b - 1, a)).toISOString().slice(0,10);
+          let mm = Number(m[1]), dd = Number(m[2]), yy = Number(m[3]); // MM/DD/YYYY
+          if (yy < 100) yy += 2000;
+          iso = new Date(Date.UTC(yy, mm - 1, dd)).toISOString().slice(0,10);
         }
       }
       if (!iso) return;
@@ -427,12 +424,20 @@ async function getCalendarAvailability(req, res) {
 
     // evaluate each date
      const result = dates.map(d => {
-       const iso = formatISO(d);
+       const iso = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`; // formato ISO consistente
        const numero = d.getUTCDay() + 1; // 1..7
        const numStr = String(numero);
+       
+       console.log(`[DEBUG] Evaluando día ${iso}, numero: ${numero}, numStr: ${numStr}`);
+       
        // 1) check disponibilidad by weekday
        const horariosDia = disponibilidadMap[numStr] || disponibilidadMap[String(numero-1)] || disponibilidadMap[WEEKDAY_NAMES[numero-1]] || disponibilidadMap[WEEKDAY_NAMES[numero-1].toLowerCase()] || [];
+       console.log(`[DEBUG] Horarios encontrados para día ${numero}:`, horariosDia);
+       console.log(`[DEBUG] Claves buscadas: ${numStr}, ${String(numero-1)}, ${WEEKDAY_NAMES[numero-1]}, ${WEEKDAY_NAMES[numero-1].toLowerCase()}`);
+       
        const weekdayBlocked = horariosDia.length === 0;
+       console.log(`[DEBUG] weekdayBlocked para ${iso}: ${weekdayBlocked}`);
+       
        // 2) Cancelar Agenda: usar sets calculados previamente
        const blockedByCancel = blockedUnDiaSet.has(iso) || blockedVariosSet.has(iso);
         // 3) occupied hours
@@ -440,6 +445,9 @@ async function getCalendarAvailability(req, res) {
         const horariosNormalized = (horariosDia || []).map(normalizeToHM);
         const availableHorarios = horariosNormalized.filter(h => !occupiedSet.has(h));
         const available = !weekdayBlocked && !blockedByCancel && availableHorarios.length > 0;
+        
+        console.log(`[DEBUG] Resultado para ${iso}:`, { weekdayBlocked, blockedByCancel, available, horarios: availableHorarios });
+        
         return { iso, numero, blocked: weekdayBlocked || blockedByCancel ? true : false, weekdayBlocked, blockedByCancel, available, horarios: availableHorarios };
      });
 
