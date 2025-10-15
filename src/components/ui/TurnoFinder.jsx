@@ -338,14 +338,24 @@ const sortUpcoming = (items) => {
     // normalizar horarios del payload (ya deberían venir HH:MM, pero por si acaso)
     const dayHorarios = Array.isArray(payload.horarios) ? payload.horarios.map(h => onlyHHMM(h)).filter(Boolean) : [];
 
-    // pedir disponibilidad AL BACKEND (que devuelve { horarios: [...] } con los horarios DISPONIBLES)
+    // Si el payload ya incluye horarios (el endpoint /calendar ya los calculó y filtró), usarlos directamente
+    // Esto evita una llamada redundante y evita que diferencias de parsing/timezone hagan que la
+    // llamada a /api/turnos/disponibilidad devuelva un resultado vacío en algunos entornos.
+    if (dayHorarios.length) {
+      setHorarios(dayHorarios);
+      setDisponibilidadMsg("");
+      setHora(""); setSelectedHoras([]); setServicio("");
+      return;
+    }
+
+    // Si no había horarios en el payload, intentar pedir disponibilidad puntual al backend
     try {
       // añadir cache-bust para evitar 304/response cached que deje datos desactualizados
       const res = await fetch(`/api/turnos/disponibilidad?fecha=${encodeURIComponent(iso)}&_=${Date.now()}`);
       if (res.ok) {
         const json = await res.json().catch(()=>null);
         if (json && Array.isArray(json.horarios)) {
-          // backend ya nos devolvió horarios disponibles (HH:MM). Usamos eso directamente.
+          // backend devolvió horarios disponibles (HH:MM). Usamos eso.
           const normalized = json.horarios.map(h => onlyHHMM(h)).filter(Boolean);
           setHorarios(normalized);
           setDisponibilidadMsg(normalized.length ? "" : "No hay horarios disponibles para este día.");
@@ -357,7 +367,7 @@ const sortUpcoming = (items) => {
       console.warn("Error fetch disponibilidad (fallback a payload):", e);
     }
 
-    // fallback: filtrar payload.horarios quitando ocupados (si por alguna razón backend no devolvió lista)
+    // fallback final: usar dayHorarios (aunque esté vacío)
     setHorarios(dayHorarios);
     setDisponibilidadMsg(dayHorarios.length ? "" : "No hay horarios disponibles para este día.");
     setHora(""); setSelectedHoras([]); setServicio("");
