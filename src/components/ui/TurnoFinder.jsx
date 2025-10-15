@@ -152,6 +152,7 @@ export default function TurnoFinder() {
   const [loadingCalendar, setLoadingCalendar] = useState(false);
 
   const dayNames = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const dayNamesShort = ['D','L','M','X','J','V','S'];
 
   // rango: pedimos al backend start/end como ISO (YYYY-MM-DD)
   const today = new Date();
@@ -817,8 +818,13 @@ const sortUpcoming = (items) => {
                 <p className="text-gray-300 bg-gray-800/50 p-4 rounded-lg text-center">Cargando calendario...</p>
               ) : (
                 <div>
-                  <div className="grid grid-cols-7 gap-2 text-center mb-4 text-sm">
-                    {dayNames.map((dn, idx) => <div key={idx} className="font-bold text-yellow-400 py-2">{dn}</div>)}
+                  <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center mb-4 text-sm">
+                    {dayNamesShort.map((dn, idx) => (
+                      <div key={idx} className="font-bold text-yellow-400 py-2 text-xs sm:text-sm">
+                        <span className="sm:hidden">{dn}</span>
+                        <span className="hidden sm:inline">{dayNames[idx]}</span>
+                      </div>
+                    ))}
                   </div>
 
                   {weeks.length === 0 ? (
@@ -842,18 +848,21 @@ const sortUpcoming = (items) => {
                             );
                             // weekday header (una fila con las 7 columnas: Lunes, Martes, ...)
                             rows.push(
-                              <div key={"weekday-header-" + wi} className="col-span-7 grid grid-cols-7 gap-2 text-center mb-3 text-sm">
-                                {dayNames.map((dn, idx) => (
-                                  <div key={idx} className="font-bold text-yellow-400 py-2">{dn}</div>
+                              <div key={"weekday-header-" + wi} className="col-span-7 grid grid-cols-7 gap-1 sm:gap-2 text-center mb-3 text-sm">
+                                {dayNamesShort.map((dn, idx) => (
+                                  <div key={idx} className="font-bold text-yellow-400 py-2 text-xs sm:text-sm">
+                                    <span className="sm:hidden">{dn}</span>
+                                    <span className="hidden sm:inline">{dayNames[idx]}</span>
+                                  </div>
                                 ))}
                               </div>
                             );
                             lastMonth = weekMonth;
                           }
                           rows.push(
-                            <div key={"week-" + wi} className="col-span-7 grid grid-cols-7 gap-2">
+                            <div key={"week-" + wi} className="col-span-7 grid grid-cols-7 gap-1 sm:gap-2 mb-2">
                               {week.map((cell, ci) => {
-                                if (!cell) return <div key={ci} className="h-14"></div>;
+                                if (!cell) return <div key={ci} className="h-12 sm:h-14"></div>;
                                 const isToday = cell.dateObj.toISOString().slice(0,10) === today.toISOString().slice(0,10);
                                 const isSelected = cell.iso === fecha;
                                 const base = cell.available ? 'bg-gray-700 hover:bg-gray-600 text-white border border-gray-500' : 'bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700';
@@ -866,10 +875,10 @@ const sortUpcoming = (items) => {
                                     disabled={!cell.available}
                                     aria-pressed={isSelected}
                                     style={style}
-                                    className={`h-14 rounded-xl ${base} ${isToday ? 'ring-2 ring-yellow-400' : ''} flex items-center justify-center font-semibold transition-all duration-300 hover:scale-105`}
+                                    className={`h-12 sm:h-14 rounded-xl ${base} ${isToday ? 'ring-2 ring-yellow-400' : ''} flex items-center justify-center font-semibold transition-all duration-300 hover:scale-105`}
                                     title={cell.blocked ? "Día bloqueado" : !cell.available ? "Sin horarios" : `Horarios: ${cell.horarios.join(", ")}`}
                                   >
-                                    <div className="text-sm">{cell.dateObj.getDate()}</div>
+                                    <div className="text-xs sm:text-sm">{cell.dateObj.getDate()}</div>
                                   </button>
                                 );
                               })}
@@ -929,7 +938,7 @@ const sortUpcoming = (items) => {
                 </div>
               ) : (
                 <button onClick={submitTurno} disabled={creating || !fecha || !(allowsMultiple ? selectedHoras.length>0 : hora) || !servicio} className="px-8 py-3 bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg">
-                  {creating ? "Creando turno..." : "Confirmar turno"}
+                  {creating ? "Creando turno..." : "Confirmar"}
                 </button>
               )}
             </div>
