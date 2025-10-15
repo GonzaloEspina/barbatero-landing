@@ -1,4 +1,49 @@
-export default function handler(req, res) {
+import { normalizeRows } from "../../backend/utils/turnsUtils.js";
+
+// AppSheet service functions
+async function doAction(tableName, body) {
+  const BASE = process.env.APPSHEET_BASE_URL;
+  const APP_KEY = process.env.APPSHEET_ACCESS_KEY;
+  
+  const url = `${BASE}/tables/${tableName}/Action`;
+  const headers = {
+    'Content-Type': 'application/json'
+  };
+  if (APP_KEY) headers.ApplicationAccessKey = APP_KEY;
+
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body)
+  });
+
+  const raw = await resp.text();
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    console.warn("[AppSheet] response not JSON");
+    return { error: raw };
+  }
+}
+
+async function readRows(tableName) {
+  return await doAction(tableName, {
+    Action: "Read",
+    Properties: {},
+    Rows: []
+  });
+}
+
+async function findRows(tableName, filter = "") {
+  return await doAction(tableName, {
+    Action: "Find",
+    Properties: {},
+    Rows: [],
+    Filter: filter || `([Nombre] <> "")`
+  });
+}
+
+export default async function handler(req, res) {
   // Configurar CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -14,58 +59,54 @@ export default function handler(req, res) {
     return res.status(405).json({ error: 'Método no permitido' });
   }
 
-  console.log('💳 Membresías request');
+  console.log('💳 Membresías request usando AppSheet...');
 
-  // Mock: Lista de membresías disponibles
-  // En producción esto consultaría AppSheet
-  const memberships = [
-    {
-      key: "premium_monthly",
-      nombre: "Premium Mensual",
-      descripcion: "Acceso completo por 30 días",
-      precio: "$15000",
-      beneficios: [
-        "Cortes ilimitados",
-        "Arreglo de barba incluido",
-        "Prioridad en reservas",
-        "Descuento en productos"
-      ],
-      duracion: "30 días",
-      activa: true
-    },
-    {
-      key: "premium_quarterly",
-      nombre: "Premium Trimestral", 
-      descripcion: "Acceso completo por 90 días con descuento",
-      precio: "$40000",
-      beneficios: [
-        "Cortes ilimitados",
-        "Arreglo de barba incluido",
-        "Prioridad en reservas",
-        "Descuento en productos",
-        "20% de ahorro vs mensual"
-      ],
-      duracion: "90 días",
-      activa: true
-    },
-    {
-      key: "basic_monthly",
-      nombre: "Básica Mensual",
-      descripcion: "Plan básico para uso regular",
-      precio: "$8000",
-      beneficios: [
-        "4 cortes por mes",
-        "Descuento en servicios adicionales"
-      ],
-      duracion: "30 días",
-      activa: true
+  try {
+    // Intentar con findRows primero
+    let membresiasResp = await findRows("Membresías", `([Nombre] <> "")`);
+    let membresiasRows = normalizeRows(membresiasResp);
+    
+    // Si no funcionó, intentar con readRows
+    if (!membresiasRows || membresiasRows.length === 0) {
+      console.log('[DEBUG] findRows devolvió vacío, intentando readRows...');
+      const readResp = await readRows("Membresías");
+      membresiasRows = normalizeRows(readResp);
     }
-  ];
 
-  console.log('✅ Membresías disponibles:', memberships.length);
+    console.log('[DEBUG] Membresías encontradas:', membresiasRows?.length || 0);
+    
+    // Log completo de una membresía para ver qué campos están disponibles
+    if (membresiasRows && membresiasRows.length > 0) {
+      console.log('[DEBUG] Primera membresía completa:', membresiasRows[0]);
+    }
 
-  res.status(200).json({
-    memberships,
-    message: `${memberships.length} membresías disponibles`
-  });
+    const memberships = (membresiasRows || []).map(row => ({
+      "Row ID": row["Row ID"] || row["RowID"] || row._RowNumber || row.id,
+      "key": row["Row ID"] || row["RowID"] || row._RowNumber || row.id, // Para compatibilidad con frontend
+      "nombre": row["Nombre"] || row.nombre || row.Membresía || row.membresía,
+      "membresia": row["Nombre"] || row.nombre || row.Membresía || row.membresía, // Alias para compatibilidad
+      "descripcion": `Cantidad de turnos: ${row["Cantidad de Turnos"] || row["cantidad"] || "N/A"} - Válido por: ${row["Meses Activa"] || row["meses"] || "N/A"} meses - Valor: ${row["Valor"] || row["Precio"] || row.precio || "N/A"}`,
+      "precio": row["Valor"] || row["Precio"] || row.precio || "",
+      "beneficios": row["Beneficios"] || row.beneficios || [],
+      "duracion": `${row["Meses Activa"] || row["meses"] || "N/A"} meses`,
+      "cantidadTurnos": row["Cantidad de Turnos"] || row["cantidad"] || "",
+      "mesesActiva": row["Meses Activa"] || row["meses"] || "",
+      "valor": row["Valor"] || row["Precio"] || row.precio || "", // Campo que espera el frontend
+      "activa": true // Por defecto true para membresías disponibles
+    })).filter(m => m.nombre); // Filtrar solo las que tengan nombre definido
+
+    console.log('[DEBUG] Membresías normalizadas:', memberships);
+    
+    return res.status(200).json({
+      memberships,
+      message: `${memberships.length} membresías disponibles`
+    });
+  } catch (error) {
+    console.error('[ERROR] Error obteniendo membresías:', error);
+    return res.status(500).json({ 
+      error: 'Error obteniendo membresías',
+      details: error.message,
+      success: false 
+    });
+  }
 }
