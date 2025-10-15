@@ -20,28 +20,30 @@ export default function Hero() {
       }}
     >
       <div className="hero-overlay">
-        <div className="hero-overlay-box container-narrow text-center">
-          <h2 className="text-5xl md:text-6xl font-extrabold leading-tight mb-4">
+        <div className="hero-overlay-box text-center">
+          <h1 className="text-5xl md:text-6xl font-extrabold leading-tight mb-6">
             Bienvenido a{" "}
             <span className="text-white">Barbatero</span>
-          </h2>
-          <p className="text-muted max-w-2xl mx-auto mb-6">
+          </h1>
+          <p className="text-lg max-w-2xl mx-auto mb-8 opacity-90">
             Tradición y estilo en cada corte. Reserva tu turno y viví la
             experiencia Barbatero con barberos profesionales y ambiente único.
           </p>
 
-          <div className="flex items-center justify-center gap-4">
-            <button onClick={() => scrollTo("turno")} className="btn-cta">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
+            <button onClick={() => scrollTo("turno")} className="btn-cta text-lg px-8 py-4 min-w-[192px]">
               Quiero mi turno
             </button>
-            <button onClick={() => scrollTo("about")} className="btn-outline">
+            <button onClick={() => scrollTo("about")} className="btn-outline text-lg px-8 min-w-[192px]">
               Conocé más
             </button>
           </div>
 
-          <div className="mt-6 text-sm text-muted">
-            <strong className="text-white">Horario:</strong> Lun - Sáb: 09:00 -
-            20:00
+          <div className="text-center text-white">
+            <div className="inline-flex items-center gap-2 bg-black/30 backdrop-blur-sm rounded-full px-6 py-3">
+              <span className="text-lg font-bold">Horario:</span>
+              <span className="text-lg">Lun - Sáb: 09:00 - 20:00</span>
+            </div>
           </div>
         </div>
       </div>

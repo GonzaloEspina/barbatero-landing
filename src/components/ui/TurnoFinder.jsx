@@ -104,7 +104,13 @@ export default function TurnoFinder() {
   const [nuevoNombre, setNuevoNombre] = useState("");
   const [nuevoTelefono, setNuevoTelefono] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  
+  // Estados de loading específicos para diferentes acciones
+  const [loading, setLoading] = useState(false); // buscar cliente
+  const [creating, setCreating] = useState(false); // crear turno
+  const [updatingTurnos, setUpdatingTurnos] = useState(false); // actualizar datos después de crear turno
+  const [updatingMembership, setUpdatingMembership] = useState(false); // actualizar datos después de membresía
+  
   const [showModal, setShowModal] = useState(false);
   // registro inline cuando no se encuentra el cliente
   const [registerMode, setRegisterMode] = useState(false);
@@ -127,7 +133,6 @@ export default function TurnoFinder() {
   const [servicio, setServicio] = useState("");
   const [horarios, setHorarios] = useState([]);
   const [servicios, setServicios] = useState([]);
-  const [creating, setCreating] = useState(false);
   const [disponibilidadMsg, setDisponibilidadMsg] = useState("");
 
   // feedback para copiar alias
@@ -221,6 +226,13 @@ export default function TurnoFinder() {
     } catch {
       setError("Error de conexión al backend.");
     } finally { setLoading(false); }
+  };
+
+  // Función para recargar datos del cliente después de crear membresía
+  const onReloadClientAfterMembership = async () => {
+    setUpdatingMembership(true);
+    await buscarCliente();
+    setUpdatingMembership(false);
   };
 
   // abrir modal: pedir calendario (backend devuelve iso YYYY-MM-DD)
@@ -430,7 +442,10 @@ const sortUpcoming = (items) => {
       const data = await res.json().catch(()=>null);
       if (res.ok) {
         setShowModal(false);
+        // Actualizar datos del cliente con mensaje específico
+        setUpdatingTurnos(true);
         await buscarCliente();
+        setUpdatingTurnos(false);
       } else {
         setError(data?.message || `Error al crear turno (status ${res.status})`);
       }
@@ -455,49 +470,53 @@ const sortUpcoming = (items) => {
 
   // render CalendarGrid: pasar selectedIso para hover/selected
   return (
-    <div id="turno" className="max-w-lg mx-auto mt-10 font-sans">
-      <h2 className="text-center text-2xl font-bold mb-6">Busca tu turno</h2>
+    <div id="turno" className={`turno-finder-container font-sans ${contacto.length > 20 ? 'expanded' : ''}`}>
+      <div className="bg-gradient-to-br from-gray-900 to-black p-6 rounded-2xl shadow-xl border border-gray-600">
+        <h2 className="text-center text-2xl font-bold mb-6 text-white">Busca tu turno</h2>
 
-      <div className="flex gap-2 mb-4">
-        <input
-          type="text"
-          value={contacto}
-          onChange={(e) => setContacto(e.target.value)}
-          placeholder="Ingrese correo o teléfono"
-          className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800"
-        />
-        <button onClick={buscarCliente} className="px-4 py-2 bg-blue-600 text-white rounded-md font-semibold hover:bg-blue-700 transition-colors">
-          {loading ? "Buscando..." : "Buscar"}
-        </button>
-      </div>
+        <div className="flex gap-2 mb-4">
+          <input
+            type="text"
+            value={contacto}
+            onChange={(e) => setContacto(e.target.value)}
+            placeholder="Ingrese correo o teléfono"
+            className="flex-1 px-3 py-2.5 border border-gray-600 bg-gray-800 text-white placeholder-gray-400 rounded-lg focus:outline-none focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400 transition-all text-sm"
+          />
+          <button 
+            onClick={buscarCliente} 
+            disabled={loading}
+            className="px-4 py-2.5 bg-white text-black rounded-lg font-semibold hover:bg-gray-100 disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed transition-all duration-300 text-sm shadow-md"
+          >
+            {loading ? "..." : "Buscar"}
+          </button>
+        </div>
 
-      {error && <p className="text-red-600 text-center mb-4">{error}</p>}
+        {error && <p className="text-red-400 text-center mb-4 font-medium bg-red-900/20 p-2 rounded-lg border border-red-800 text-sm">{error}</p>}
 
       {/* Formulario de registro mostrado si no se encontró el cliente */}
       {registerMode && (
-        <div className="max-w-lg mx-auto mb-6 p-4 border rounded bg-gradient-to-r from-blue-50 to-white">
-          <p className="text-blue-800 font-semibold mb-3">No se encontró el contacto ingresado. Registrate para poder sacar un turno.</p>
-          {/* Se muestra sólo el encabezado amigable; no duplicar el mensaje dentro del formulario */}
-          <div className="space-y-2">
+        <div className="mb-4 p-4 border border-gray-600 rounded-xl bg-gradient-to-br from-gray-800 to-gray-900">
+          <p className="text-white font-semibold mb-4 text-center text-sm">No se encontró el contacto. Regístrate para continuar.</p>
+          <div className="space-y-3">
             <input
               placeholder="Nombre y Apellido"
               value={registerForm.Nombre}
               onChange={e => setRegisterForm(f => ({ ...f, Nombre: e.target.value }))}
-              className="w-full p-2 border rounded"
+              className="w-full p-2.5 border border-gray-600 bg-gray-800 text-white placeholder-gray-400 rounded-lg focus:outline-none focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400 transition-all text-sm"
             />
             <input
               placeholder="Teléfono"
               value={registerForm.Telefono}
               onChange={e => setRegisterForm(f => ({ ...f, Telefono: e.target.value }))}
-              className="w-full p-2 border rounded"
+              className="w-full p-2.5 border border-gray-600 bg-gray-800 text-white placeholder-gray-400 rounded-lg focus:outline-none focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400 transition-all text-sm"
             />
             <input
               placeholder="Correo"
               value={registerForm.Correo}
               onChange={e => setRegisterForm(f => ({ ...f, Correo: e.target.value }))}
-              className="w-full p-2 border rounded"
+              className="w-full p-2.5 border border-gray-600 bg-gray-800 text-white placeholder-gray-400 rounded-lg focus:outline-none focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400 transition-all text-sm"
             />
-            <div className="flex gap-2">
+            <div className="flex gap-2 pt-1">
               <button
                 onClick={async () => {
                   setRegisterError(""); setRegisterLoading(true);
@@ -531,30 +550,35 @@ const sortUpcoming = (items) => {
                     setRegisterError("Error al crear cliente.");
                   } finally { setRegisterLoading(false); }
                 }}
-                className="px-4 py-2 bg-green-600 text-white rounded"
+                className="flex-1 px-3 py-2 bg-white text-black rounded-lg font-semibold hover:bg-gray-100 disabled:bg-gray-600 disabled:cursor-not-allowed transition-all duration-300 text-sm"
                 disabled={registerLoading}
               >
-                {registerLoading ? "Creando..." : "Crear y continuar"}
+                {registerLoading ? "..." : "Registrarse"}
               </button>
-              <button onClick={() => { setRegisterMode(false); setRegisterError(""); }} className="px-4 py-2 border rounded">Cancelar</button>
+              <button 
+                onClick={() => { setRegisterMode(false); setRegisterError(""); }} 
+                className="px-3 py-2 border border-gray-600 text-white rounded-lg font-semibold hover:bg-gray-700 transition-all duration-300 text-sm"
+              >
+                Cancelar
+              </button>
             </div>
-            {registerError && <div className="text-red-600 mt-2">{registerError}</div>}
+            {registerError && <div className="text-red-400 mt-3 text-center font-medium bg-red-900/20 p-2 rounded-lg border border-red-800 text-sm">{registerError}</div>}
           </div>
         </div>
       )}
 
       {cliente && (
-        <div className="max-w-md mx-auto mb-6">
-          <div className="bg-gray-900 text-white rounded-lg shadow-lg p-5">
+        <div className="mb-4">
+          <div className="bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-600 rounded-xl shadow-lg p-4">
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="text-lg font-bold">Tus datos</h3>
+                <h3 className="text-lg font-bold text-white">Tus datos</h3>
               </div>
               <div>
                 {!editingClient && (
                   <button
                     onClick={() => setEditingClient(true)}
-                    className="ml-3 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm shadow-sm"
+                    className="ml-3 px-3 py-1.5 bg-white hover:bg-gray-100 text-black rounded-lg text-xs font-semibold transition-all duration-300"
                   >
                     Editar
                   </button>
@@ -564,23 +588,23 @@ const sortUpcoming = (items) => {
 
             {!editingClient ? (
               <div className="mt-4 space-y-2">
-                <div className="text-sm text-gray-300"><span className="font-semibold text-gray-100">Nombre:</span> {cliente["Nombre y Apellido"] ?? cliente.Nombre ?? ""}</div>
-                <div className="text-sm text-gray-300"><span className="font-semibold text-gray-100">Teléfono:</span> {cliente["Teléfono"] ?? cliente.Telefono ?? ""}</div>
-                <div className="text-sm text-gray-300"><span className="font-semibold text-gray-100">Correo:</span> {cliente["Correo"] ?? cliente.Correo ?? ""}</div>
+                <div className="text-xs"><span className="font-semibold text-yellow-400">Nombre:</span> <span className="text-gray-200 ml-1">{cliente["Nombre y Apellido"] ?? cliente.Nombre ?? ""}</span></div>
+                <div className="text-xs"><span className="font-semibold text-yellow-400">Teléfono:</span> <span className="text-gray-200 ml-1">{cliente["Teléfono"] ?? cliente.Telefono ?? ""}</span></div>
+                <div className="text-xs"><span className="font-semibold text-yellow-400">Correo:</span> <span className="text-gray-200 ml-1">{cliente["Correo"] ?? cliente.Correo ?? ""}</span></div>
 
-                <div className="mt-4">
-                  <h4 className="text-sm font-semibold text-gray-200 mb-2">Próximos turnos</h4>
+                <div className="mt-4 pt-3 border-t border-gray-600">
+                  <h4 className="text-sm font-semibold text-white mb-2">Próximos turnos</h4>
                   {upcoming.length === 0 ? (
-                    <div className="text-sm text-gray-400">No hay próximos turnos.</div>
+                    <div className="text-xs text-gray-400 italic bg-gray-800/50 p-2 rounded-lg text-center">No hay próximos turnos.</div>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {upcoming.map((t, i) => (
-                        <div key={i} className="bg-gray-800 p-3 rounded-md flex items-center justify-between">
-                          <div>
-                            <div className="text-sm text-gray-100">{formatDateForDisplay(t.Fecha)}</div>
-                            <div className="text-xs text-gray-400">{t.Servicio}</div>
+                        <div key={i} className="bg-gradient-to-r from-gray-700 to-gray-800 border border-gray-600 p-2.5 rounded-lg flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="text-xs font-semibold text-white">{formatDateForDisplay(t.Fecha)}</div>
+                            <div className="text-[10px] text-gray-300 truncate">{t.Servicio}</div>
                           </div>
-                          <div className="text-sm font-medium text-gray-50">{onlyHHMM(t.Hora)}</div>
+                          <div className="text-xs font-bold text-yellow-400 ml-2">{onlyHHMM(t.Hora)}</div>
                         </div>
                       ))}
                     </div>
@@ -619,21 +643,21 @@ const sortUpcoming = (items) => {
 
                   // --- acción de sacar turno / mensaje (SIEMPRE mostrar antes de la sección de membresías)
                   const actionArea = (
-                    <div className="mt-4 mb-2">
+                    <div className="mt-3 mb-2">
                       {allowsMultiple ? (
-                        <button onClick={() => openModal()} className="px-4 py-2 bg-blue-600 text-white rounded-md">
+                        <button onClick={() => openModal()} className="px-4 py-2 bg-yellow-500 text-black rounded-lg font-semibold hover:bg-yellow-400 transition-all duration-300 text-sm shadow-lg">
                           Sacar otro turno
                         </button>
                       ) : (
                         within30Days ? (
                           <div className="flex items-center justify-between gap-3">
-  <div className="text-sm text-yellow-300">
+  <div className="text-xs text-yellow-300 bg-yellow-900/20 p-2 rounded-lg border border-yellow-700">
     Para sacar otro turno dentro de los próximos 30 días,
     <a
       href={`https://wa.me/5491160220978?text=${encodeURIComponent("Hola, quiero sacar otro turno")}`}
       target="_blank"
       rel="noreferrer"
-      className="ml-1 underline text-yellow-100 hover:text-white"
+      className="ml-1 underline text-yellow-400 hover:text-white transition-colors"
       aria-label="Escribir por Whatsapp"
     >
       escribinos por Whatsapp.
@@ -641,7 +665,7 @@ const sortUpcoming = (items) => {
   </div>
 </div>
                         ) : (
-                          <button onClick={() => openModal()} className="px-4 py-2 bg-blue-600 text-white rounded-md">
+                          <button onClick={() => openModal()} className="px-4 py-2 bg-yellow-500 text-black rounded-lg font-semibold hover:bg-yellow-400 transition-all duration-300 text-sm shadow-lg">
                             Sacar turno
                           </button>
                         )
@@ -657,31 +681,31 @@ const sortUpcoming = (items) => {
                         {/* Acciones (botón / mensaje) arriba */}
                         {actionArea}
 
-                        <h4 className="text-sm font-semibold text-gray-200 mb-2">Membresía Activa</h4>
+                        <h4 className="text-sm font-semibold text-white mb-2">Membresía Activa</h4>
                         {pending.map((m, idx) => {
                           const alias = "barbatero.mp";
                           return (
-                            <div key={idx} className="p-3 rounded-md mb-2 bg-gradient-to-r from-yellow-900 to-gray-800">
+                            <div key={idx} className="p-3 rounded-md mb-2 bg-gradient-to-r from-orange-600 to-yellow-600 border border-orange-500">
                               <div className="flex items-center justify-between">
-                                <div className="text-sm text-gray-100 font-semibold">
+                                <div className="text-sm text-white font-semibold">
                                   {m.Membresía ?? m.membresia ?? ""}
-                                  <span className="text-xs text-yellow-100 ml-2"> - Pendiente de Confirmación</span>
+                                  <span className="text-xs text-orange-100 ml-2"> - Pendiente de Confirmación</span>
                                 </div>
                               </div>
 
                               {/* texto de activación arriba del alias */}
-                              <div className="mt-3 text-sm text-gray-200">
+                              <div className="mt-3 text-sm text-orange-50">
                                 Para activar la membresía, realizá el pago y envianos el comprobante por Whatsapp.
                               </div>
 
                               {/* alias + acciones repartidos en todo el ancho */}
-                              <div className="mt-3 border-t pt-3 w-full flex items-center">
+                              <div className="mt-3 border-t border-orange-400 pt-3 w-full flex items-center">
                                 {/* left: alias + copiar (ocupa todo el espacio disponible) */}
                                 <div className="flex items-center gap-3 flex-1">
-                                  <div className="text-sm text-gray-200">Alias:</div>
+                                  <div className="text-sm text-orange-100">Alias:</div>
 
                                   {/* alias sin fondo - texto plano */}
-                                  <span className="text-gray-100 font-mono font-medium">{alias}</span>
+                                  <span className="text-white font-mono font-medium">{alias}</span>
 
                                   {/* botón copiar: sin fondo, líneas blancas */}
                                   <button
@@ -702,19 +726,17 @@ const sortUpcoming = (items) => {
                                 {/* right: botón WhatsApp (pequeño, menos área verde) */}
                                 <div className="ml-3 flex-shrink-0">
                                   <a
-                                    href={`https://wa.me/54911XXXXXXXX?text=${encodeURIComponent("Adjunto comprobante de pago para la membresía")}`}
+                                    href={`https://wa.me/5491160220978?text=${encodeURIComponent("Adjunto comprobante de pago para la membresía")}`}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="inline-flex items-center justify-center w-10 h-10 rounded-full border-2 border-green-600 bg-transparent hover:bg-green-600 transition-colors"
+                                    className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-green-500 hover:bg-green-600 text-white shadow-lg transition-all duration-300 border-2 border-white"
                                     title="Enviar comprobante por WhatsApp"
                                     aria-label="Enviar comprobante por WhatsApp"
                                   >
-                                    {/* WhatsApp PNG icon (clean) */}
-                                    <img
-                                      src="https://cdn-icons-png.freepik.com/256/174/174879.png?semt=ais_white_label"
-                                      alt="WhatsApp"
-                                      className="w-5 h-5"
-                                    />
+                                    {/* WhatsApp SVG icon más reconocible */}
+                                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="white" stroke="white" strokeWidth="0.5">
+                                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.097"/>
+                                    </svg>
                                   </a>
                                 </div>
                               </div>
@@ -728,16 +750,18 @@ const sortUpcoming = (items) => {
                   // Si NO tiene membresía activa ni pendiente mostramos acciones y el CTA (sin encabezado)
                   if (!hasActive && !hasPending) {
                     return (
-                      <div className="mt-4 mb-4">
+                      <div className="mt-6">
                         {/* Acciones (botón / mensaje) arriba */}
                         {actionArea}
 
-                        <MembershipCTA 
-                          clientRowId={clientRowId} 
-                          hasActive={hasActive} 
-                          hasPending={hasPending} 
-                          onReloadClient={buscarCliente}
-                        />
+                        <div className="border-t border-gray-200 pt-4">
+                          <MembershipCTA 
+                            clientRowId={clientRowId} 
+                            hasActive={hasActive} 
+                            hasPending={hasPending} 
+                            onReloadClient={buscarCliente}
+                          />
+                        </div>
 
                       </div>
                     );
@@ -745,25 +769,27 @@ const sortUpcoming = (items) => {
 
                   // Si tiene al menos una activa, mostramos acciones + encabezado y lista como antes
                   return (
-                    <div className="mt-4">
+                    <div className="mt-6">
                       {/* Acciones (botón / mensaje) arriba */}
                       {actionArea}
 
-                      <h4 className="text-sm font-semibold text-gray-200 mb-2">Membresía activa</h4>
-                      {membresias.filter(m => getEstado(m) === "activa").map((m, idx) => (
-                        <div key={idx} className="bg-gradient-to-r from-green-900 to-gray-800 p-3 rounded-md mb-2">
-                          <div className="text-sm text-gray-100 font-semibold">{m.Membresía}</div>
-                          <div className="text-xs text-gray-300">Inicio: <span className="font-medium text-gray-200">{formatDateForDisplay(m["Fecha de Inicio"])}</span></div>
-                          <div className="text-xs text-gray-300">Vencimiento: <span className="font-medium text-gray-200">{formatDateForDisplay(m.Vencimiento)}</span></div>
-                          <div className="text-xs text-gray-300 mt-1">Turnos restantes: <span className="font-medium text-green-200">{m["Turnos Restantes"]}</span></div>
-                        </div>
-                      ))}
+                      <div className="border-t border-gray-200 pt-4">
+                        <h4 className="text-lg font-semibold text-black mb-3">Membresía activa</h4>
+                        {membresias.filter(m => getEstado(m) === "activa").map((m, idx) => (
+                          <div key={idx} className="bg-gradient-to-r from-green-600 to-emerald-600 border border-green-500 p-4 rounded-md mb-3">
+                            <div className="text-sm text-white font-semibold">{m.Membresía}</div>
+                            <div className="text-xs text-green-100 mt-1">Inicio: <span className="font-medium text-white">{formatDateForDisplay(m["Fecha de Inicio"])}</span></div>
+                            <div className="text-xs text-green-100">Vencimiento: <span className="font-medium text-white">{formatDateForDisplay(m.Vencimiento)}</span></div>
+                            <div className="text-xs text-green-100 mt-1">Turnos restantes: <span className="font-medium text-white">{m["Turnos Restantes"]}</span></div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   );
                 })()}
               </div>
             ) : (
-              <div className="mt-4">
+              <div className="mt-6 border-t border-gray-200 pt-4">
                 <EditClientInline
                   client={cliente}
                   onSaved={(updated) => {
@@ -780,23 +806,23 @@ const sortUpcoming = (items) => {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
-            <h3 className="text-lg font-bold mb-4">Sacar turno</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-600 rounded-3xl shadow-2xl p-8 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <h3 className="text-2xl font-bold text-white mb-8">Sacar turno</h3>
 
-            <div className="mb-4">
-              <label className="block font-semibold mb-2">Seleccione fecha</label>
+            <div className="mb-8">
+              <label className="block font-bold text-white mb-4">Seleccione fecha</label>
 
               {loadingCalendar ? (
-                <p>Cargando calendario...</p>
+                <p className="text-gray-300 bg-gray-800/50 p-4 rounded-lg text-center">Cargando calendario...</p>
               ) : (
                 <div>
-                  <div className="grid grid-cols-7 gap-1 text-center mb-2 text-xs">
-                    {dayNames.map((dn, idx) => <div key={idx} className="font-semibold">{dn}</div>)}
+                  <div className="grid grid-cols-7 gap-2 text-center mb-4 text-sm">
+                    {dayNames.map((dn, idx) => <div key={idx} className="font-bold text-yellow-400 py-2">{dn}</div>)}
                   </div>
 
                   {weeks.length === 0 ? (
-                    <div className="col-span-7 text-sm text-gray-600">No hay fechas disponibles en el rango.</div>
+                    <div className="col-span-7 text-sm text-gray-400 bg-gray-800/50 p-4 rounded-lg text-center">No hay fechas disponibles en el rango.</div>
                   ) : (
                     <div>
                       {(() => {
@@ -810,15 +836,15 @@ const sortUpcoming = (items) => {
                             // insert month separator/header
                             const monthLabel = firstDay ? new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(firstDay.dateObj) : '';
                             rows.push(
-                              <div key={"month-" + wi} className="col-span-7 text-center text-xs text-gray-600 py-1 border-b">
+                              <div key={"month-" + wi} className="col-span-7 text-center text-lg text-white font-bold py-4 border-b border-gray-600 mb-4">
                                 {monthLabel}
                               </div>
                             );
                             // weekday header (una fila con las 7 columnas: Lunes, Martes, ...)
                             rows.push(
-                              <div key={"weekday-header-" + wi} className="col-span-7 grid grid-cols-7 gap-1 text-center mb-1 text-xs">
+                              <div key={"weekday-header-" + wi} className="col-span-7 grid grid-cols-7 gap-2 text-center mb-3 text-sm">
                                 {dayNames.map((dn, idx) => (
-                                  <div key={idx} className="font-semibold text-gray-700">{dn}</div>
+                                  <div key={idx} className="font-bold text-yellow-400 py-2">{dn}</div>
                                 ))}
                               </div>
                             );
@@ -827,12 +853,12 @@ const sortUpcoming = (items) => {
                           rows.push(
                             <div key={"week-" + wi} className="col-span-7 grid grid-cols-7 gap-2">
                               {week.map((cell, ci) => {
-                                if (!cell) return <div key={ci} className="h-10"></div>;
+                                if (!cell) return <div key={ci} className="h-14"></div>;
                                 const isToday = cell.dateObj.toISOString().slice(0,10) === today.toISOString().slice(0,10);
                                 const isSelected = cell.iso === fecha;
-                                const base = cell.available ? 'bg-white hover:bg-blue-50 text-black' : 'bg-gray-200 text-gray-400 cursor-not-allowed';
+                                const base = cell.available ? 'bg-gray-700 hover:bg-gray-600 text-white border border-gray-500' : 'bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700';
                                 // use inline style for selected to avoid class specificity issues
-                                const style = isSelected ? { backgroundColor: '#2563eb', color: '#ffffff' } : undefined;
+                                const style = isSelected ? { backgroundColor: '#eab308', color: '#000000', borderColor: '#eab308' } : undefined;
                                 return (
                                   <button
                                     key={ci}
@@ -840,7 +866,7 @@ const sortUpcoming = (items) => {
                                     disabled={!cell.available}
                                     aria-pressed={isSelected}
                                     style={style}
-                                    className={`h-10 rounded ${base} ${isToday ? 'ring-2 ring-blue-300' : ''} flex items-center justify-center`}
+                                    className={`h-14 rounded-xl ${base} ${isToday ? 'ring-2 ring-yellow-400' : ''} flex items-center justify-center font-semibold transition-all duration-300 hover:scale-105`}
                                     title={cell.blocked ? "Día bloqueado" : !cell.available ? "Sin horarios" : `Horarios: ${cell.horarios.join(", ")}`}
                                   >
                                     <div className="text-sm">{cell.dateObj.getDate()}</div>
@@ -854,16 +880,16 @@ const sortUpcoming = (items) => {
                       })()}
                     </div>
                   )}
-                 <p className="text-xs text-gray-500 mt-2">Fechas deshabilitadas están bloqueadas o sin horarios disponibles.</p>
+                 <p className="text-sm text-gray-400 mt-4 font-medium bg-gray-800/50 p-3 rounded-lg">Fechas deshabilitadas están bloqueadas o sin horarios disponibles.</p>
                 </div>
               )}
             </div>
 
             {/* mostrar hora solo si fecha seleccionada y disponible */}
             {fecha ? (
-              <div className="mb-4">
-                <label className="block font-semibold mb-2">Hora</label>
-                {disponibilidadMsg && <p className="text-red-600 mb-2">{disponibilidadMsg}</p>}
+              <div className="mb-8">
+                <label className="block font-bold text-white mb-4">Hora</label>
+                {disponibilidadMsg && <p className="text-red-400 mb-4 font-medium bg-red-900/20 p-3 rounded-lg border border-red-800">{disponibilidadMsg}</p>}
                 {/* Time picker: pasar las horas filtradas */}
                 <TimePicker
                   options={horarios || []}        // horarios calculados por selectFecha (strings "HH:MM")
@@ -876,9 +902,9 @@ const sortUpcoming = (items) => {
 
             {/* mostrar servicios solo si hora seleccionada */}
             {(allowsMultiple ? selectedHoras.length > 0 : hora) ? (
-              <div className="mb-4">
-                <label className="block font-semibold mb-2">Servicio</label>
-                <select value={servicio} onChange={(e) => setServicio(e.target.value)} className="mt-1 w-full p-2 border rounded">
+              <div className="mb-8">
+                <label className="block font-bold text-white mb-4">Servicio</label>
+                <select value={servicio} onChange={(e) => setServicio(e.target.value)} className="w-full p-4 border border-gray-600 bg-gray-800 text-white rounded-xl focus:border-yellow-400 focus:outline-none focus:ring-1 focus:ring-yellow-400 transition-all">
                   <option value="">Seleccionar servicio</option>
                   {servicios.map((s, idx) => {
                     const id = s["Row ID"] || s["RowID"] || s.RowID || s.id || s["RowId"] || s["Row Id"];
@@ -890,22 +916,27 @@ const sortUpcoming = (items) => {
               </div>
             ) : null}
 
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setShowModal(false)} className="px-3 py-1 border rounded">Cancelar</button>
+            <div className="flex justify-end gap-4 pt-6 border-t border-gray-600">
+              <button onClick={() => setShowModal(false)} className="px-6 py-3 border border-gray-600 bg-transparent hover:bg-gray-700 text-white rounded-xl font-semibold transition-all duration-300">
+                Cancelar
+              </button>
               {(!allowsMultiple && Array.isArray(upcoming) && upcoming.length > 0) ? (
-                <div className="flex items-center gap-3">
-                  <p className="text-sm text-gray-700">Si querés sacar más turnos este mes, por favor contactanos por Whatsapp</p>
-                  <a href="https://wa.me/541160220978?text=Hola%2C%20quiero%20sacar%20m%C3%A1s%20turnos" target="_blank" rel="noreferrer" className="px-3 py-1 bg-green-600 text-white rounded">Whatsapp</a>
+                <div className="flex items-center gap-4">
+                  <p className="text-sm text-gray-300 font-medium bg-gray-800/50 p-3 rounded-lg">Si querés sacar más turnos este mes, por favor contactanos por Whatsapp</p>
+                  <a href="https://wa.me/5491160220978?text=Hola%2C%20quiero%20sacar%20m%C3%A1s%20turnos" target="_blank" rel="noreferrer" className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition-all duration-300">
+                    Whatsapp
+                  </a>
                 </div>
               ) : (
-                <button onClick={submitTurno} disabled={creating || !fecha || !(allowsMultiple ? selectedHoras.length>0 : hora) || !servicio} className="px-3 py-1 bg-blue-600 text-white rounded">
-                  {creating ? "Creando..." : "Confirmar"}
+                <button onClick={submitTurno} disabled={creating || !fecha || !(allowsMultiple ? selectedHoras.length>0 : hora) || !servicio} className="px-8 py-3 bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg">
+                  {creating ? "Creando turno..." : "Confirmar turno"}
                 </button>
               )}
             </div>
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

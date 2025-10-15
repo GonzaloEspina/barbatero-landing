@@ -1,5 +1,5 @@
 import React from "react";
-import Logo from "../assets/logo-modificado-blanco.svg";
+import Logo from "../assets/logo-editado-canva.svg";
 
 export default function Header() {
   const scrollTo = (id) => {
@@ -24,7 +24,7 @@ export default function Header() {
         {/* center: nav */}
         <nav className="nav-center" aria-label="Main navigation">
           <a href="#about" onClick={(e)=>{e.preventDefault(); scrollTo("about");}} className="nav-link">Nosotros</a>
-          <a href="#services" onClick={(e)=>{e.preventDefault(); scrollTo("services");}} className="nav-link">Servicios</a>
+          <a href="#ubicacion" onClick={(e)=>{e.preventDefault(); scrollTo("ubicacion");}} className="nav-link">Ubicación</a>
           <a href="#reviews" onClick={(e)=>{e.preventDefault(); scrollTo("reviews");}} className="nav-link">Reseñas</a>
         </nav>
 

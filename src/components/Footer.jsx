@@ -2,15 +2,15 @@ import React from "react";
 
 export default function Footer() {
   return (
-    <footer className="bg-black/80 border-t border-white/6">
-      <div className="container mx-auto px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
-        <div>
-          <p className="text-sm text-gray-400">© {new Date().getFullYear()} Barbatero. Todos los derechos reservados.</p>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <a href="#" className="text-gray-300 hover:text-white text-sm">Política de privacidad</a>
-          <a href="#" className="text-gray-300 hover:text-white text-sm">Contacto</a>
+    <footer className="footer-section py-6 bg-black">
+      <div className="container-narrow">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="text-center md:text-left">
+            <p className="text-sm text-gray-300">© {new Date().getFullYear()} Barbatero</p>
+          </div>
+          <div className="text-center md:text-right">
+            <p className="text-sm text-gray-300">Estilo y distinción desde el primer corte</p>
+          </div>
         </div>
       </div>
     </footer>

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Google Reviews Integration</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #1a1a1a; color: white; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .review { background: #2a2a2a; padding: 20px; margin: 10px 0; border-radius: 8px; }
+        .loading { text-align: center; color: #888; }
+        .error { color: #ff6b6b; background: #2a1a1a; padding: 15px; border-radius: 8px; }
+        .success { color: #51cf66; background: #1a2a1a; padding: 15px; border-radius: 8px; }
+        .place-info { background: #2a4a2a; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .stars { color: #ffd700; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Test Google Reviews Integration</h1>
+        <div id="status">Loading...</div>
+        <div id="place-info"></div>
+        <div id="reviews"></div>
+    </div>
+
+    <script>
+        async function testGoogleReviews() {
+            const statusEl = document.getElementById('status');
+            const placeInfoEl = document.getElementById('place-info');
+            const reviewsEl = document.getElementById('reviews');
+
+            try {
+                statusEl.innerHTML = '<div class="loading">Fetching Google Places reviews...</div>';
+                
+                const response = await fetch('/api/reviews/google-places');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusEl.innerHTML = '<div class="success">✅ Google Places API integration working successfully!</div>';
+                    
+                    // Display place info
+                    placeInfoEl.innerHTML = `
+                        <div class="place-info">
+                            <h2>${data.place.name}</h2>
+                            <p>Rating: <span class="stars">${'★'.repeat(Math.floor(data.place.rating))}${'☆'.repeat(5-Math.floor(data.place.rating))}</span> ${data.place.rating}/5</p>
+                            <p>Total Reviews: ${data.place.totalReviews}</p>
+                        </div>
+                    `;
+                    
+                    // Display reviews
+                    reviewsEl.innerHTML = data.reviews.map(review => `
+                        <div class="review">
+                            <div class="stars">${'★'.repeat(review.rating)}${'☆'.repeat(5-review.rating)}</div>
+                            <h3>${review.author}</h3>
+                            <p>"${review.text}"</p>
+                            <small>Posted: ${review.time} (${review.relativeTime})</small>
+                        </div>
+                    `).join('');
+                    
+                } else {
+                    throw new Error('API returned success: false');
+                }
+                
+            } catch (error) {
+                statusEl.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+                console.error('Error testing Google reviews:', error);
+            }
+        }
+
+        // Run test when page loads
+        window.addEventListener('load', testGoogleReviews);
+    </script>
+</body>
+</html>

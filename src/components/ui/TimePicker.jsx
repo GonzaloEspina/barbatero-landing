@@ -13,7 +13,7 @@ export default function TimePicker({ options = [], occupied = [], onSelect = () 
   const occupiedSet = new Set((occupied || []).map(o => onlyHHMM(o)));
 
   return (
-    <div className="flex flex-wrap">
+    <div className="grid grid-cols-4 gap-3">
       {(options || []).map(opt => {
         const optKey = onlyHHMM(opt);
         const isOccupied = occupiedSet.has(optKey);
@@ -25,10 +25,10 @@ export default function TimePicker({ options = [], occupied = [], onSelect = () 
             onClick={() => { if (!isOccupied) onSelect(optKey); }}
             disabled={isOccupied}
             className={
-              `px-2 py-1 m-1 rounded border text-sm transition ` +
+              `px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ` +
               (isOccupied
-                ? "bg-gray-200 text-gray-400 border-gray-200 cursor-not-allowed"
-                : (isSelected ? "bg-blue-600 text-white border-blue-700" : "bg-white hover:bg-blue-50 text-black"))
+                ? "bg-gray-800 text-gray-500 border border-gray-700 cursor-not-allowed"
+                : (isSelected ? "bg-yellow-500 text-black border-2 border-yellow-400 scale-105 shadow-lg" : "bg-gray-700 hover:bg-gray-600 text-white border border-gray-600 hover:scale-105"))
             }
           >
             {optKey}

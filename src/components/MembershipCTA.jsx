@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 const API_BASE = "/api/turnos";
 const ALIAS = "barbatero.mp";
-const WHATSAPP_NUMBER = "54911XXXXXXXX"; // reemplazar por el real
+const WHATSAPP_NUMBER = "5491160220978"; // número correcto con código de país
 const CLIP_ICON = "https://cdn.iconscout.com/icon/premium/png-256-thumb/copiar-alt-iv-icon-svg-download-png-7284084.png?f=webp&w=128";
 
 function formatValor(v){
@@ -74,26 +74,28 @@ export default function MembershipCTA({ clientRowId, hasActive, hasPending, onRe
 
   return (
     <>
-      <div className="space-y-3">
-        <div className="bg-gray-800 text-gray-100 rounded-md p-3">
-          <div className="text-sm font-semibold">
+      <div className="space-y-4">
+        <div className="bg-white border-2 border-black rounded-lg p-4 shadow-lg">
+          <div className="text-lg font-bold text-black">
             ¡Comprá una membresía y ahorrá en tus próximos cortes!
           </div>
+          <p className="text-gray-700 mt-2">Accedé a precios especiales y beneficios exclusivos</p>
         </div>
         <button
           onClick={openModal}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold"
+          className="w-full px-6 py-3 bg-black hover:bg-gray-800 text-white rounded-md font-bold text-lg transition-colors"
         >
           Comprar Membresía
         </button>
       </div>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-xl">
-            <div className="flex items-start justify-between mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white border-2 border-black rounded-lg shadow-2xl p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between mb-6">
               <div>
-                <p className="text-sm text-gray-600">
+                <h3 className="text-xl font-bold text-black mb-3">Comprar Membresía</h3>
+                <p className="text-sm text-gray-700 font-medium">
                   Para activar la membresía, realizá el pago
                   en efectivo en el local o por transferencia al Alias y envianos
                   el comprobante por Whatsapp.
@@ -102,7 +104,7 @@ export default function MembershipCTA({ clientRowId, hasActive, hasPending, onRe
               <div>
                 <button
                   onClick={() => setOpen(false)}
-                  className="ml-3 px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm"
+                  className="ml-3 px-4 py-2 border-2 border-black bg-white hover:bg-gray-100 rounded-md text-sm font-semibold transition-colors"
                 >
                   Cerrar
                 </button>
@@ -110,47 +112,49 @@ export default function MembershipCTA({ clientRowId, hasActive, hasPending, onRe
             </div>
 
             {loading ? (
-              <div className="text-center py-6">Cargando...</div>
+              <div className="text-center py-8">
+                <div className="text-lg font-medium text-black">Cargando membresías...</div>
+              </div>
             ) : error ? (
-              <div className="text-red-600">{error}</div>
+              <div className="text-red-600 font-medium bg-red-50 p-4 rounded-md border border-red-200">{error}</div>
             ) : memberships.length === 0 ? (
-              <div className="text-sm text-gray-600">No hay membresías disponibles.</div>
+              <div className="text-sm text-gray-600 text-center py-6">No hay membresías disponibles.</div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {memberships.map((m) => (
                   <div
                     key={m.key}
-                    className="border rounded p-3 flex items-center justify-between"
+                    className="border-2 border-black rounded-lg p-4 bg-white shadow-lg"
                   >
-                    <div>
-                      <div className="font-semibold text-gray-800">
-                        {m.membresia}
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="font-bold text-lg text-black mb-2">
+                          {m.membresia}
+                        </div>
+                        <div className="text-sm text-gray-700 space-y-1">
+                          <div>
+                            <span className="font-semibold text-black">Cantidad de turnos:</span>{" "}
+                            <span className="font-bold text-black">{m.cantidadTurnos}</span>
+                          </div>
+                          <div>
+                            <span className="font-semibold text-black">Válido por:</span>{" "}
+                            <span className="font-bold text-black">{m.mesesActiva} meses</span>
+                          </div>
+                          <div>
+                            <span className="font-semibold text-black">Valor:</span>{" "}
+                            <span className="font-bold text-lg text-black">{formatValor(m.valor)}</span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-xs text-gray-600 mt-1">
-                        Cantidad de turnos:{" "}
-                        <span className="font-medium text-gray-800">
-                          {m.cantidadTurnos}
-                        </span>
-                        {"  -  "}
-                        Válido por:{" "}
-                        <span className="font-medium text-gray-800">
-                          {m.mesesActiva} meses
-                        </span>
-                        {"  -  "}
-                        Valor:{" "}
-                        <span className="font-medium text-gray-800">
-                          {formatValor(m.valor)}
-                        </span>
+                      <div className="ml-4">
+                        <button
+                          onClick={() => reserve(m.key)}
+                          className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-md font-bold transition-colors disabled:opacity-50"
+                          disabled={loading}
+                        >
+                          Reservar
+                        </button>
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <button
-                        onClick={() => reserve(m.key)}
-                        className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm"
-                        disabled={loading}
-                      >
-                        Reservar
-                      </button>
                     </div>
                   </div>
                 ))}

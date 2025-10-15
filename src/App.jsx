@@ -5,18 +5,24 @@ import About from "./components/About";
 import Reviews from "./components/Reviews";
 import Footer from "./components/Footer";
 import TurnoFinder from "./components/ui/TurnoFinder";
+import FloatingButtons from "./components/FloatingButtons";
+import MapSection from "./components/MapSection";
 
 export default function App() {
   return (
-    <div className="min-h-screen flex flex-col bg-black text-white">
+    <div className="min-h-screen bg-black text-white">
       <Header />
-      <main className="flex-1">
+      <main>
         <Hero />
         <About />
+        <section id="turno" className="turno-section">
+          <TurnoFinder />
+        </section>
+        <MapSection />
         <Reviews />
-        <TurnoFinder />
       </main>
       <Footer />
+      <FloatingButtons />
     </div>
   );
 }

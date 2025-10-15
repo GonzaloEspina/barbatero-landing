@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Google Places API</title>
+</head>
+<body>
+    <h1>Test Google Places API</h1>
+    <button onclick="testAPI()">Probar API</button>
+    <pre id="result"></pre>
+
+    <script>
+    async function testAPI() {
+        const resultElement = document.getElementById('result');
+        resultElement.textContent = 'Cargando...';
+        
+        try {
+            const response = await fetch('/api/reviews/google-places');
+            const data = await response.json();
+            resultElement.textContent = JSON.stringify(data, null, 2);
+        } catch (error) {
+            resultElement.textContent = 'Error: ' + error.message;
+        }
+    }
+    </script>
+</body>
+</html>

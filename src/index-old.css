@@ -63,7 +63,7 @@
     background: transparent;
     color: var(--foreground);
     border: 2px solid var(--accent);
-    padding: 10px 24px;
+    padding: 12px 24px;
     border-radius: 6px;
     font-weight: 600;
     font-size: 16px;
@@ -71,7 +71,6 @@
     cursor: pointer;
     text-decoration: none;
     display: inline-block;
-    box-sizing: border-box;
   }
 
   .btn-outline:hover {
@@ -115,6 +114,7 @@
 .logo {
   width: 45px;
   height: 45px;
+  filter: brightness(0) invert(1);
 }
 
 .site-name {
@@ -172,12 +172,6 @@
   font-size: 16px;
   text-decoration: none;
   display: inline-block;
-  box-sizing: border-box;
-}
-
-/* Espacio específico para el botón del header */
-.site-header .btn-cta {
-  margin: 8px 0;
 }
 
 .btn-cta:hover {
@@ -197,7 +191,7 @@
   align-items: center;
   justify-content: center;
   position: relative;
-  padding-top: 80px;
+  padding-top: 80px; /* Account for fixed header */
 }
 
 .hero-overlay {
@@ -248,6 +242,7 @@
   background: var(--turno-section-bg);
   color: var(--foreground);
   padding: 6rem 0;
+  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -330,7 +325,6 @@
   
   .btn-cta, .btn-outline {
     width: 100%;
-    max-width: 300px;
     margin-bottom: 1rem;
   }
   
@@ -357,83 +351,236 @@
   background: #b8941f;
 }
 
-/* Botones flotantes */
-.floating-buttons {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  z-index: 1000;
+  /* inputs / buttons */
+  input, select, textarea {
+    background: var(--input);
+    color: var(--color-foreground);
+    border: 1px solid var(--color-border);
+  }
+
+  .btn-cta {
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 8px 16px;
+    border-radius: 999px;
+    font-weight: 700;
+    border: 1px solid var(--color-border);
+    transition: background .15s ease, color .15s ease, box-shadow .12s ease, transform .12s ease;
+    box-shadow: 0 6px 20px rgba(8,10,20,0.06);
+  }
+  .btn-cta:hover,
+  .btn-cta:focus {
+    background: #000000 !important;
+    color: #ffffff !important;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px rgba(2,6,23,0.12);
+  }
+
+  .text-muted { color: var(--color-muted); }
 }
 
-.floating-btn {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
+/* Hero full-bleed rules (if used) */
+.hero-full {
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  width: 100%;
+  min-height: 72vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  text-decoration: none;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  border: none;
-  cursor: pointer;
+  position: relative;
 }
-
-.floating-btn:hover {
-  transform: translateY(-2px) scale(1.05);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
-}
-
-.floating-btn.whatsapp {
-  background: #25D366;
-  color: white;
-}
-
-.floating-btn.whatsapp:hover {
-  background: #128C7E;
-}
-
-.floating-btn.scroll-top {
-  background: var(--accent);
-  color: var(--accent-foreground);
-}
-
-.floating-btn.scroll-top:hover {
-  background: #b8941f;
-}
-
-/* Ocultar botón de scroll cuando esté en el top */
-.floating-btn.scroll-top.hidden {
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(10px);
-}
-
-/* Buscador de turnos dinámico */
-.turno-finder-container {
+.hero-overlay {
   width: 100%;
-  max-width: 512px;
-  margin: 0 auto;
-  transition: max-width 0.3s ease;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6rem 1rem;
+  background: linear-gradient(180deg, rgba(0,0,0,0.55), rgba(0,0,0,0.55));
 }
 
-.turno-finder-container.expanded {
-  max-width: min(600px, 90vw);
+/* About section light background and cards */
+.about-section { background: var(--page-light, #f7fafc); color: #0b1220; padding-top: 4rem; padding-bottom: 4rem; }
+.about-card { display:flex; align-items:flex-start; gap:1rem; padding: 18px; border-radius: 10px; }
+
+/* layout helpers (fix header + limit About width) */
+.container-narrow {
+  max-width: 1100px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
 }
 
-/* Sección del mapa */
-.map-section {
-  background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%);
+/* Ensure header stays on top and has correct spacing */
+.site-header {
+  position: relative;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 0;
 }
 
-.map-section iframe {
-  filter: grayscale(20%) brightness(0.8) contrast(1.1);
-  transition: filter 0.3s ease;
+/* nav layout inside header */
+.site-header nav {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
 }
 
-.map-section iframe:hover {
-  filter: grayscale(0%) brightness(1) contrast(1);
+/* logo sizing in header */
+.site-header .logo {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+/* CTA in header: white pill like the mockup */
+.site-header .btn-cta {
+  background: #ffffff;
+  color: #000000;
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-weight: 700;
+  box-shadow: 0 6px 20px rgba(8,10,20,0.6);
+}
+
+/* Make sure hero overlay doesn't visually cover the header */
+.hero-full { z-index: 0; }
+.hero-overlay-box { z-index: 10; }
+
+/* Header / layout fixes */
+.site-header { position: sticky; top: 0; z-index: 60; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+.site-header .container-narrow { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem; }
+
+/* logo sizing and spacing */
+.site-header .logo { width: 44px; height: 44px; object-fit: contain; }
+
+/* center nav styling */
+.site-header nav a { font-weight: 600; letter-spacing: 0.01em; color: var(--color-foreground); }
+.site-header nav a:hover { color: var(--color-accent); }
+
+/* CTA pill style consistent with example (dark pill on light header) */
+.btn-cta {
+  background: var(--color-foreground);
+  color: var(--color-accent-foreground);
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-weight: 700;
+  box-shadow: 0 6px 20px rgba(8,10,20,0.6);
+  border: 1px solid rgba(255,255,255,0.03);
+}
+
+/* Hero overlay width: hacer más estrecha la caja central (comporta mejor con header) */
+.hero-overlay-box {
+  max-width: 760px; /* antes más ancha, ahora más cercana al ejemplo */
+  padding: 2.25rem 2rem;
+}
+
+/* About section: asegurar max 80vw y centrado */
+.about-section .container-narrow {
+  width: min(80vw, 1100px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Si se ve desacomodado en pantallas pequeñas */
+@media (max-width: 1024px) {
+  .site-header .container-narrow { grid-template-columns: auto 1fr auto; }
+  .hero-overlay-box { max-width: 92%; padding: 1.5rem; }
+  .about-section .container-narrow { width: 92vw; }
+}
+
+@media (max-width: 768px) {
+  .about-card { padding: 14px; }
+  .about-section { padding-top: 2.5rem; padding-bottom: 2.5rem; }
+}
+
+/* Header final tuning to match ejemplo layout */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  background: var(--color-card);       /* light header like ejemplo */
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-foreground);
+}
+
+/* Header layout to match ejemplo: left logo, centered nav, right CTA */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  background: var(--color-card);       /* light header */
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-foreground);      /* ensures logo-currentcolor fills correctly */
+}
+
+/* grid wrapper inside header */
+.header-grid {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+}
+
+/* left block (logo + name) */
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* logo uses currentColor from header so silhouette is dark on light header */
+.logo { width: 50px; height: 50px; display: block; }
+
+/* site name styling */
+.site-name {
+  font-weight: 700;
+  color: var(--color-foreground);
+  font-size: 1rem;
+}
+
+/* center nav: centered and spaced */
+.nav-center {
+  justify-self: center;
+  display: flex;
+  gap: 28px;
+  align-items: center;
+}
+
+/* nav links appearance */
+.nav-link {
+  color: var(--color-foreground);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  padding: 6px 0;
+  transition: color .12s ease;
+}
+.nav-link:hover { color: var(--color-accent); }
+
+/* right block (CTA) */
+.header-right { display: flex; justify-content: flex-end; align-items: center; }
+
+/* CTA pill style (dark pill on light header as in ejemplo) */
+.btn-cta {
+  background: var(--color-foreground);
+  color: var(--color-accent-foreground);
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-weight: 700;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 10px 30px rgba(2,6,23,0.08);
+}
+
+/* responsive: hide centered nav on small screens and keep logo + CTA */
+@media (max-width: 768px) {
+  .nav-center { display: none; }
+  .header-grid { grid-template-columns: auto 1fr auto; padding-left: 0.75rem; padding-right: 0.75rem; }
 }

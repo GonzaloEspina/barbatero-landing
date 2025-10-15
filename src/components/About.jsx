@@ -1,13 +1,8 @@
 import React from "react";
 import Foto from "../assets/foto-cortando-pelo.jpeg";
-import { Clock, MapPin, Phone, Scissors } from "lucide-react";
+import { Scissors } from "lucide-react";
 
 export default function About() {
-  const address = "Faustino Nicolás Cesio 243, B1706 Haedo, Provincia de Buenos Aires";
-  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
-  const whatsappNumberInternational = "5491160220978";
-  const whatsappUrl = `https://wa.me/${whatsappNumberInternational}?text=${encodeURIComponent("Hola, quiero sacar un turno")}`;
-
   return (
     <section id="about" className="about-section py-16">
       <div className="container-narrow mx-auto px-4">
@@ -22,54 +17,24 @@ export default function About() {
               En <strong>Barbatero</strong> combinamos técnicas tradicionales de barbería con las últimas tendencias en cortes masculinos. Nuestro equipo de barberos profesionales se dedica a brindarte una experiencia única y personalizada.
             </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="about-card flex items-start gap-4">
-                <Clock className="w-6 h-6 text-gray-500 mt-1 shrink-0" />
-                <div>
-                  <h4 className="font-semibold mb-2">Horarios</h4>
-                  <div className="text-sm text-gray-600">
-                    Lun - Vie: 09:30 - 19:00<br />
-                    Sábados: 09:30 - 20:00<br />
-                    Domingos: Cerrado
-                  </div>
-                </div>
-              </div>
-
-              <div className="about-card flex items-start gap-4">
-                <MapPin className="w-6 h-6 text-gray-500 mt-1 shrink-0" />
-                <div>
-                  <h4 className="font-semibold mb-2">Ubicación</h4>
-                  <div className="text-sm text-gray-600">
-                    <a href={mapsUrl} target="_blank" rel="noreferrer" className="text-gray-700 hover:underline">
-                      {address}
-                    </a>
-                  </div>
-                </div>
-              </div>
-
-              <div className="about-card flex items-start gap-4">
-                <Phone className="w-6 h-6 text-gray-500 mt-1 shrink-0" />
-                <div>
-                  <h4 className="font-semibold mb-2">Contacto</h4>
-                  <div className="text-sm text-gray-600">
-                    <a href={whatsappUrl} target="_blank" rel="noreferrer" className="text-gray-700 hover:underline">
-                      +54 9 11 6022 0978
-                    </a>
-                    <div className="text-xs text-gray-500 mt-2">También respondemos por WhatsApp.</div>
-                  </div>
-                </div>
-              </div>
-
+            <div className="grid grid-cols-1 gap-6">
               <div className="about-card flex items-start gap-4">
                 <Scissors className="w-6 h-6 text-gray-500 mt-1 shrink-0" />
                 <div>
-                  <h4 className="font-semibold mb-2">Servicios</h4>
-                  <ul className="text-sm text-gray-600 list-disc list-inside">
-                    <li>Cortes clásicos y modernos</li>
-                    <li>Afeitado tradicional</li>
-                    <li>Arreglo de barba y diseño</li>
+                  <h4 className="font-semibold mb-2">Nuestros Servicios</h4>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    <li>• Cortes clásicos y modernos</li>
+                    <li>• Afeitado tradicional</li>
+                    <li>• Arreglo de barba y diseño</li>
+                    <li>• Atención personalizada</li>
                   </ul>
                 </div>
+              </div>
+              
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <p className="text-sm text-gray-600 italic">
+                  "Cada corte es una obra de arte. Nuestro compromiso es que salgas sintiéndote renovado y con la confianza de lucir tu mejor versión."
+                </p>
               </div>
             </div>
           </div>
