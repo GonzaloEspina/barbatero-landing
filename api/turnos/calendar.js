@@ -1,6 +1,20 @@
 // Importar utilidades del backend que funcionan
 import { normalizeRows, extractTimeHHMM, parseFechaDMY, toISODate } from "../../backend/utils/turnsUtils.js";
 
+// Función auxiliar para convertir valores a string
+function valueToString(v) {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "object") {
+    const cand = v.value ?? v.displayValue ?? v.text ?? v.label ?? null;
+    if (cand === null || cand === undefined) {
+      try { return String(v); } catch (e) { return ""; }
+    }
+    if (typeof cand === "object") return JSON.stringify(cand);
+    return String(cand);
+  }
+  return String(v);
+}
+
 const TURNOS_TABLE = "Turnos";
 const DISPONIBILIDAD_TABLE = "Disponibilidad";
 
@@ -198,9 +212,65 @@ async function getCalendarAvailability(req, res) {
       hrs.forEach(h => { if (h) occupiedByISO[iso].add(h); });
     });
 
-    // Simplificar para debugging - skip Cancelar Agenda por ahora
+    // Procesar Cancelar Agenda - calcular días bloqueados
     const blockedVariosSet = new Set();
     const blockedUnDiaSet = new Set();
+    
+    console.log('[calendar] Processing Cancelar Agenda, found rows:', cancelRows.length);
+    
+    // Procesar registros de Cancelar Agenda
+    (cancelRows || []).forEach(r => {
+      const tipoRaw = r.Cancelar ?? r["Cancelar"] ?? r.cancelar ?? "";
+      const tipo = valueToString(tipoRaw).trim();
+      
+      console.log('[calendar] Cancelar row:', { tipo, data: r });
+      
+      if (tipo === "Varios días") {
+        // Rango de fechas desde "Desde" hasta "Hasta"
+        const desdeRaw = r.Desde ?? r["Desde"] ?? r.desde ?? "";
+        const hastaRaw = r.Hasta ?? r["Hasta"] ?? r.hasta ?? "";
+        
+        console.log('[calendar] Varios días:', { desde: desdeRaw, hasta: hastaRaw });
+        
+        if (desdeRaw && hastaRaw) {
+          try {
+            const fechaDesde = parseFechaDMY(desdeRaw);
+            const fechaHasta = parseFechaDMY(hastaRaw);
+            
+            if (fechaDesde && fechaHasta) {
+              // Generar todas las fechas en el rango
+              const current = new Date(fechaDesde);
+              while (current <= fechaHasta) {
+                const iso = toISODate(current);
+                blockedVariosSet.add(iso);
+                console.log('[calendar] Added to blockedVariosSet:', iso);
+                current.setUTCDate(current.getUTCDate() + 1);
+              }
+            }
+          } catch (e) {
+            console.warn('[calendar] Error parsing Varios días range:', e);
+          }
+        }
+      } else if (tipo === "Un día") {
+        // Fecha específica en campo "Día"
+        const unDiaRaw = r["Día"] ?? r["Un día"] ?? r["Un dia"] ?? r.UnDia ?? r.undia ?? r.Dia ?? "";
+        
+        console.log('[calendar] Un día:', unDiaRaw);
+        
+        if (unDiaRaw) {
+          try {
+            const fecha = parseFechaDMY(unDiaRaw);
+            if (fecha) {
+              const iso = toISODate(fecha);
+              blockedUnDiaSet.add(iso);
+              console.log('[calendar] Added to blockedUnDiaSet:', iso);
+            }
+          } catch (e) {
+            console.warn('[calendar] Error parsing Un día:', e);
+          }
+        }
+      }
+    });
 
     // evaluate each date
      const result = dates.map(d => {
