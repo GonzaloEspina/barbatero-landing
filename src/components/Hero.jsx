@@ -42,7 +42,7 @@ export default function Hero() {
           <div className="text-center text-white">
             <div className="inline-flex items-center gap-2 bg-black/30 backdrop-blur-sm rounded-full px-6 py-3">
               <span className="text-lg font-bold">Horario:</span>
-              <span className="text-lg">Lun - Sáb: 09:00 - 20:00</span>
+              <span className="text-lg">Lun - Sáb: 09:30 - 19:00</span>
             </div>
           </div>
         </div>

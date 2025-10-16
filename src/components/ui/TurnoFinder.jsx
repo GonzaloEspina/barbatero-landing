@@ -473,7 +473,7 @@ const sortUpcoming = (items) => {
   return (
     <div id="turno" className={`turno-finder-container font-sans ${contacto.length > 20 ? 'expanded' : ''}`}>
       <div className="bg-gradient-to-br from-gray-900 to-black p-6 rounded-2xl shadow-xl border border-gray-600">
-        <h2 className="text-center text-2xl font-bold mb-6 text-white">Busca tu turno</h2>
+        <h2 className="text-center text-2xl font-bold mb-6 text-white">Agenda tu turno</h2>
 
         <div className="flex gap-2 mb-4">
           <input
