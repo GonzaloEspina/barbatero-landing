@@ -51,7 +51,7 @@ export default function MapSection() {
                   </svg>
                   Horarios
                 </h3>
-                <p className="text-gray-300 text-sm">Lun - Sáb: 09:00 - 20:00</p>
+                <p className="text-gray-300 text-sm">Lun - Sáb: 09:30 - 19:00</p>
                 <p className="text-gray-300 text-sm">Domingo: Cerrado</p>
               </div>
               
@@ -63,7 +63,7 @@ export default function MapSection() {
                   Contacto
                 </h3>
                 <a href="tel:+5491160220978" className="text-yellow-400 hover:text-yellow-300 transition-colors text-sm">
-                  +54 9 11 6022 0978
+                  1160220978
                 </a>
               </div>
             </div>
