@@ -146,6 +146,35 @@ export default function TurnoFinder() {
       // silencioso
     }
   };
+
+  // eliminar membresía pendiente
+  const handleDeleteMembership = async (membershipRowId) => {
+    if (!confirm("¿Estás seguro de que querés eliminar esta membresía pendiente?")) {
+      return;
+    }
+    
+    try {
+      setUpdatingMembership(true);
+      const res = await fetch("/api/turnos/memberships/delete", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ membershipRowId })
+      });
+      
+      if (res.ok) {
+        // Recargar datos del cliente
+        await buscarCliente();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.message || "Error al eliminar la membresía");
+      }
+    } catch (e) {
+      console.error("Error eliminando membresía:", e);
+      alert("Error de conexión al eliminar la membresía");
+    } finally {
+      setUpdatingMembership(false);
+    }
+  };
   
   // calendar state
   const [calendarDays, setCalendarDays] = useState([]); // [{ iso: "YYYY-MM-DD", dateObj, available, blocked, horarios }]
@@ -692,6 +721,15 @@ const sortUpcoming = (items) => {
                                   {m.Membresía ?? m.membresia ?? ""}
                                   <span className="text-xs text-orange-100 ml-2"> - Pendiente de Confirmación</span>
                                 </div>
+                                {/* Botón para eliminar membresía pendiente */}
+                                <button
+                                  onClick={() => handleDeleteMembership(m["Row ID"] || m.RowID || m.id)}
+                                  disabled={updatingMembership}
+                                  className="ml-2 px-2 py-1 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded text-xs font-medium transition-colors"
+                                  title="Eliminar membresía pendiente"
+                                >
+                                  {updatingMembership ? "..." : "Eliminar"}
+                                </button>
                               </div>
 
                               {/* texto de activación arriba del alias */}
