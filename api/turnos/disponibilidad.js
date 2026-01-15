@@ -51,7 +51,8 @@ async function findRows(tableName, filter = "") {
   return await doAction(tableName, {
     Action: "Find",
     Properties: {},
-    Rows: [{ Selector: filter || `([Numero] <> "")` }]
+    Rows: [],
+    Filter: filter || ""
   });
 }
 
@@ -123,15 +124,18 @@ export default async function handler(req, res) {
     const numParam = req.query.num ? Number(req.query.num) : null;
 
     // Leer Disponibilidad
-    let dispResp = await findRows(DISPONIBILIDAD_TABLE, `([Número] <> "")`);
+    console.log("[getDisponibilidad] consultando tabla Disponibilidad");
+    let dispResp = await readRows(DISPONIBILIDAD_TABLE);
     let dispRows = normalizeRows(dispResp) || [];
-    if (!dispRows.length) dispRows = normalizeRows(await readRows(DISPONIBILIDAD_TABLE)) || [];
+    console.log("[getDisponibilidad] filas de disponibilidad obtenidas:", dispRows.length);
 
     // construir map simple: clave = número 1..7 -> horarios normalizados HH:MM
     const disponibilidadMap = {};
+    console.log("[getDisponibilidad] procesando filas de disponibilidad:", dispRows);
     for (const r of (dispRows || [])) {
       const keyRaw = String(r["Número"] ?? r.Numero ?? r.numero ?? r["Día"] ?? r.Dia ?? "").trim();
       const raw = r["Horarios"] ?? r.Horarios ?? r.horarios ?? "";
+      console.log("[getDisponibilidad] procesando fila:", { keyRaw, raw });
       let arr = [];
       if (Array.isArray(raw)) arr = raw.map(x => normalizeToHM(x));
       else arr = String(raw || "").split(",").map(x => normalizeToHM(x)).filter(Boolean);

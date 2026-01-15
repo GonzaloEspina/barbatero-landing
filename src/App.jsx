@@ -15,11 +15,11 @@ export default function App() {
       <main>
         <Hero />
         <About />
-        <section id="turno" className="turno-section py-16">
+        {/*<section id="turno" className="turno-section py-16">
           <div className="container-narrow">
             <TurnoFinder />
           </div>
-        </section>
+        </section>*/}
         <MapSection />
         <Reviews />
       </main>

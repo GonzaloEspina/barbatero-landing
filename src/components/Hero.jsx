@@ -1,6 +1,9 @@
 import React from "react";
 import HeroIllustration from "../assets/hero-illustration.jpeg";
 
+  const whatsappUrl = `https://wa.me/5491160220978?text=${encodeURIComponent("Hola, quiero sacar un turno")}`;
+
+
 export default function Hero() {
   const scrollTo = (id) => {
     const el = document.getElementById(id);
@@ -31,9 +34,15 @@ export default function Hero() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
-            <button onClick={() => scrollTo("turno")} className="btn-cta text-lg px-8 py-4 min-w-[192px]">
-              Quiero mi turno
-            </button>
+            <div className="header-right">
+  <button
+    onClick={() => window.open(whatsappUrl, "_blank")}
+    className="btn-cta"
+    aria-label="Quiero mi turno"
+  >
+    Quiero mi turno
+  </button>
+</div>
             <button onClick={() => scrollTo("about")} className="btn-outline text-lg px-8 min-w-[192px]">
               Conocé más
             </button>

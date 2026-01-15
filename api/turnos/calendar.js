@@ -104,41 +104,53 @@ async function getCalendarAvailability(req, res) {
     }
 
     const disponibilidadMap = {};
+    console.log("[calendar] Procesando filas de disponibilidad:", dispRows.length);
     (dispRows || []).forEach((r, index) => {
       const keyRaw = String(r["Número"] ?? r.Numero ?? r.numero ?? r["Día"] ?? r.Dia ?? r.Dia ?? "").trim();
       const raw = r["Horarios"] ?? r.Horarios ?? r.horarios ?? "";
+      console.log(`[calendar] Fila ${index}: keyRaw='${keyRaw}', horarios='${raw}'`);
       let arr = [];
       if (Array.isArray(raw)) arr = raw.map(x => extractTimeHHMM(x));
       else arr = String(raw || "").split(",").map(x => extractTimeHHMM(x)).filter(Boolean);
       const uniq = Array.from(new Set(arr.filter(Boolean)));
 
-      // generar múltiples claves posibles para esta fila
+      // generar claves correctas para esta fila
       const keys = new Set();
       if (keyRaw) {
         keys.add(keyRaw);
         const n = Number(keyRaw);
         if (!isNaN(n)) {
-          // soportar convención 1..7 y 0..6
-          keys.add(String(n));
-          keys.add(String(n - 1));
-          const idx = ((n - 1) + 7) % 7;
-          keys.add(WEEKDAY_NAMES[idx]);
-          keys.add(WEEKDAY_NAMES[idx].toLowerCase());
+          // AppSheet usa 1=Lunes, 2=Martes, ..., 6=Sábado (NO hay domingo=7)
+          // JavaScript usa 0=Domingo, 1=Lunes, 2=Martes, ..., 6=Sábado
+          // Solo mapear si el número está en rango válido (1-6 para AppSheet)
+          if (n >= 1 && n <= 6) {
+            keys.add(String(n)); // AppSheet number (1-6)
+            // Mapeo correcto: AppSheet n → JavaScript n (1→1, 2→2, etc.)
+            const jsWeekday = n; // Lunes AppSheet(1) → Lunes JS(1)
+            keys.add(String(jsWeekday));
+            keys.add(WEEKDAY_NAMES[jsWeekday]);
+            keys.add(WEEKDAY_NAMES[jsWeekday].toLowerCase());
+          }
         } else {
           // si es nombre de weekday
           const idx = WEEKDAY_NAMES.findIndex(w => w.toLowerCase() === keyRaw.toLowerCase());
           if (idx >= 0) {
-            keys.add(String(idx + 1));
-            keys.add(String(idx));
             keys.add(WEEKDAY_NAMES[idx]);
             keys.add(WEEKDAY_NAMES[idx].toLowerCase());
+            // Solo generar número si no es domingo (idx=0)
+            if (idx !== 0) {
+              keys.add(String(idx)); // JS weekday number (1-6)
+            }
           }
         }
       }
 
       // asignar same horarios a todas las claves detectadas
+      console.log(`[calendar] Claves generadas para '${keyRaw}':`, Array.from(keys));
       for (const k of keys) disponibilidadMap[String(k)] = uniq;
     });
+    
+    console.log("[calendar] DisponibilidadMap final:", disponibilidadMap);
 
     // --- Leer Cancelar Agenda (fallback find -> read) ---
     let cancelResp = await findRows("Cancelar Agenda", `([Cancelar] <> "")`);
@@ -276,19 +288,44 @@ async function getCalendarAvailability(req, res) {
      const result = dates.map(d => {
        const iso = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
        
-       // Mapeo correcto de días de la semana
+       // Mapeo CORRECTO de días de la semana
        // JavaScript getUTCDay(): domingo=0, lunes=1, martes=2, miércoles=3, jueves=4, viernes=5, sábado=6
-       // AppSheet Número: domingo=1, lunes=2, martes=3, miércoles=4, jueves=5, viernes=6, sábado=7
+       // AppSheet Disponibilidad: Domingo=1 (NO EXISTE), Lunes=2, Martes=3, Miércoles=4, Jueves=5, Viernes=6, Sábado=7
        const jsWeekday = d.getUTCDay(); // 0-6
-       const appsheetNumber = jsWeekday + 1; // Convertir: 0->1, 1->2, 2->3, ..., 6->7
        
-       // 1) check disponibilidad by weekday - buscar por número de AppSheet
-       const horariosDia = disponibilidadMap[String(appsheetNumber)] || 
-                          disponibilidadMap[String(jsWeekday)] || 
-                          disponibilidadMap[WEEKDAY_NAMES[jsWeekday]] || 
-                          disponibilidadMap[WEEKDAY_NAMES[jsWeekday].toLowerCase()] || [];
+       // Conversión JS → AppSheet
+       const appsheetNumber = jsWeekday === 0 ? 1 : jsWeekday + 1;
+       // JS Domingo(0) → AppSheet Domingo(1) - NO EXISTE en tabla
+       // JS Lunes(1) → AppSheet Lunes(2) 
+       // JS Martes(2) → AppSheet Martes(3), etc.
+       
+       // 1) check disponibilidad by weekday
+       let horariosDia = [];
+       
+       if (jsWeekday === 0) {
+         // Domingo: AppSheet número 1, pero NO existe en la tabla → siempre bloqueado
+         horariosDia = [];
+       } else {
+         // Lunes a Sábado: buscar en disponibilidadMap usando número AppSheet
+         horariosDia = disponibilidadMap[String(appsheetNumber)] || 
+                      disponibilidadMap[WEEKDAY_NAMES[jsWeekday]] || 
+                      disponibilidadMap[WEEKDAY_NAMES[jsWeekday].toLowerCase()] || [];
+       }
        
        const weekdayBlocked = horariosDia.length === 0;
+       
+       if (WEEKDAY_NAMES[jsWeekday] === 'Domingo') {
+         console.log(`[calendar] DOMINGO ${iso}: jsWeekday=${jsWeekday}, appsheetNumber=${appsheetNumber}`);
+         console.log(`[calendar] Domingo AppSheet(1) NO existe en tabla → siempre bloqueado`);
+         console.log(`  - horariosDia:`, horariosDia);
+         console.log(`  - weekdayBlocked:`, weekdayBlocked);
+       } else if (WEEKDAY_NAMES[jsWeekday] === 'Lunes') {
+         console.log(`[calendar] LUNES ${iso}: jsWeekday=${jsWeekday}, appsheetNumber=${appsheetNumber}`);
+         console.log(`[calendar] Buscando Lunes AppSheet(2) en disponibilidadMap`);
+         console.log(`  - disponibilidadMap["${appsheetNumber}"]:`, disponibilidadMap[String(appsheetNumber)] ? 'ENCONTRADO' : 'NO ENCONTRADO');
+         console.log(`  - horariosDia:`, horariosDia);
+         console.log(`  - weekdayBlocked:`, weekdayBlocked);
+       }
        
        // 2) Cancelar Agenda: usar sets calculados previamente
        const blockedByCancel = blockedUnDiaSet.has(iso) || blockedVariosSet.has(iso);

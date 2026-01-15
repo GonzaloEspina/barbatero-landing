@@ -1,6 +1,8 @@
 import React from "react";
 import Logo from "../assets/logo-editado-canva.svg";
 
+  const whatsappUrl = `https://wa.me/5491160220978?text=${encodeURIComponent("Hola, quiero sacar un turno")}`;
+
 export default function Header() {
   const scrollTo = (id) => {
     const el = document.getElementById(id);
@@ -30,8 +32,14 @@ export default function Header() {
 
         {/* right: CTA */}
         <div className="header-right">
-          <button onClick={() => scrollTo("turno")} className="btn-cta" aria-label="Quiero mi turno">Quiero mi turno</button>
-        </div>
+  <button
+    onClick={() => window.open(whatsappUrl, "_blank")}
+    className="btn-cta"
+    aria-label="Quiero mi turno"
+  >
+    Quiero mi turno
+  </button>
+</div>
       </div>
     </header>
   );

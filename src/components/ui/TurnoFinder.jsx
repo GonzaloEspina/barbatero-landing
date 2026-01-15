@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, memo } from "react";
 import CalendarGrid from "./CalendarGrid";
 import TimePicker from "./TimePicker";
 import ServiceSelect from "./ServiceSelect";
@@ -95,7 +95,7 @@ const tryParseDate = (input) => {
 // El frontend usa el iso tal cual que devuelve el backend (YYYY-MM-DD) en calendarDays[].iso
 // y envía al backend Fecha exactamente como cadena (Fecha = iso).
 
-export default function TurnoFinder() {
+function TurnoFinder() {
   const [contacto, setContacto] = useState("");
   const [cliente, setCliente] = useState(null);
   const [upcoming, setUpcoming] = useState([]);
@@ -949,6 +949,9 @@ const sortUpcoming = (items) => {
     </div>
   );
 }
+
+// Export optimizado con React.memo
+export default memo(TurnoFinder);
 
 // Componente de búsqueda/registro de cliente (named export para evitar dos default exports en el mismo archivo)
 export function ClientSearchAndRegister({ onClientReady }) {
